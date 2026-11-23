@@ -1,0 +1,13 @@
+@page "/fornecedores/novo"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = Politicas.CriarFornecedor)]
+
+@using Barbearia.Models
+
+<PageTitle>Novo fornecedor</PageTitle>
+
+<FormFornecedor Modelo="fornecedor" Novo="true" />
+
+@code {
+    private readonly Fornecedor fornecedor = new();
+}

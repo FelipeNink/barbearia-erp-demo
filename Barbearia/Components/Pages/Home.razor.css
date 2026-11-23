@@ -1,0 +1,292 @@
+
+.cabecalho-painel {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+/* O h1 global ja traz tamanho e caixa alta; aqui so tira a margem
+   de baixo, porque quem espaca e o cabecalho. */
+.titulo-painel {
+    margin: 0;
+}
+
+.painel {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1.25rem;
+    align-items: stretch;
+    margin-bottom: 1.25rem;
+}
+
+.cartao {
+    background: var(--superficie);
+    border: 1px solid var(--borda-suave);
+    border-radius: 10px;
+    padding: 1rem 1.25rem 0.85rem;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+    display: flex;
+    flex-direction: column;
+}
+
+.cartao-topo {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+}
+
+.cartao-topo h2 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--texto);
+}
+
+.cartao-sub {
+    font-size: 0.78rem;
+    color: var(--texto-fraco);
+}
+
+/* Altura fixa + maintainAspectRatio:false = o Chart.js respeita este tamanho.
+   Sem flex:1 aqui: o stretch do grid sobrescreveria a altura. Mais baixo
+   que em Relatorios: no painel o grafico divide espaco com a agenda. */
+.area-grafico {
+    position: relative;
+    height: 220px;
+    flex: 0 0 220px;
+}
+
+.area-grafico canvas {
+    max-width: 100%;
+}
+
+/* ---------- avisos ----------
+   Lado a lado, numa linha cada; o detalhe corta com reticencias e a
+   lista inteira vai no title. Mesmas cores do aviso de alerta. */
+.avisos-painel {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 10px 0 1.25rem;
+}
+
+.aviso-compacto {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 320px;
+    min-width: 0;
+    padding: 7px 12px;
+    border: 1px solid var(--alerta-borda);
+    border-radius: var(--raio-cartao);
+    background: var(--alerta-fundo);
+    color: var(--alerta-texto);
+    font-size: 13px;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.aviso-compacto:hover {
+    filter: brightness(1.08);
+}
+
+.aviso-compacto svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    color: var(--alerta);
+}
+
+.aviso-compacto strong {
+    flex: none;
+    font-weight: 600;
+}
+
+.aviso-compacto span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0.8;
+}
+
+/* Detalhe sob o valor, nao ao lado dele. */
+.indicador .detalhe {
+    display: block;
+    margin-top: 2px;
+    font-size: 13px;
+    color: var(--texto-3);
+}
+
+.indicador.prejuizo .valor {
+    color: var(--perigo-escuro);
+}
+
+/* ---------- faixa de caixa ---------- */
+
+.faixa-caixa {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+    padding: 0.85rem 1.25rem;
+    border-radius: 10px;
+    border: 1px solid var(--borda-suave);
+    background: var(--superficie);
+}
+
+.faixa-caixa.aberto {
+}
+
+.faixa-caixa.fechado {
+    background: var(--alerta-fundo);
+}
+
+.faixa-caixa strong {
+    display: block;
+    font-size: 0.9rem;
+    color: var(--texto);
+}
+
+.faixa-caixa span {
+    font-size: 0.8rem;
+    color: var(--texto-fraco);
+}
+
+.gaveta-agora {
+    margin-left: auto;
+    text-align: right;
+}
+
+.gaveta-agora strong {
+    font-size: 1.15rem;
+    color: var(--ok-escuro);
+}
+
+/* O secundario global ja define forma e cor; aqui so o corpo menor,
+   porque ele vive dentro da faixa e nao numa barra de acoes. */
+.link-caixa {
+    height: 38px;
+    padding: 0 14px;
+    font-size: 14px;
+}
+
+/* ---------- período ---------- */
+
+@media (max-width: 1100px) {
+    .painel {
+        grid-template-columns: 1fr;
+    }
+
+    .indicadores {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .atalhos {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Valor na gaveta em condensada: e o numero que se confere de longe. */
+.gaveta-agora strong {
+    font-family: var(--fonte-titulo);
+    font-size: 32px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+/* O ponto de status ja carrega a cor; o texto volta ao normal. */
+.faixa-caixa .status {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+/* A regra local de .faixa-caixa strong virava o .status em block e o
+   ponto, sem conteudo, ficava inline com altura zero. */
+.faixa-caixa .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.faixa-caixa .status i {
+    display: block;
+    width: 7px;
+    height: 7px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--ok);
+    box-shadow: 0 0 0 4px var(--ok-fundo);
+}
+
+/* ---------- expediente (aberta/fechada) ---------- */
+
+.expediente {
+    position: relative;
+    display: inline-block;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+}
+
+.selo-expediente {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 1px 8px;
+    font-size: 12px;
+    color: var(--texto-3);
+    background: transparent;
+    border: 1px solid var(--borda);
+    border-radius: 999px;
+}
+
+button.selo-expediente {
+    cursor: pointer;
+}
+
+.selo-expediente i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--texto-fraco);
+}
+
+.selo-expediente.aberta i {
+    background: var(--ok);
+}
+
+.menu-expediente {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    min-width: 210px;
+    padding: 4px;
+    background: var(--superficie);
+    border: 1px solid var(--borda);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.menu-expediente button,
+.menu-expediente a {
+    padding: 6px 10px;
+    font-size: 13px;
+    text-align: left;
+    color: var(--texto);
+    text-decoration: none;
+    background: transparent;
+    border: 0;
+    border-radius: 6px;
+}
+
+.menu-expediente button:hover,
+.menu-expediente a:hover {
+    background: var(--superficie-3);
+}

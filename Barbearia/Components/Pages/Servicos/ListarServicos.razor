@@ -1,0 +1,207 @@
+﻿@page "/servico"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = Politicas.Servicos)]
+
+@using Barbearia.Configs
+@using Barbearia.Models
+@inject ServicoDAO servicoDAO
+@inject NavigationManager Navigation
+
+
+<h1 class="titulo-listagem">Gestão de Serviços</h1>
+
+<div class="barra-acoes barra-listagem">
+    <BotaoExportar Href="/relatorio/servicos" />
+    <NavLink href="/servico/novo" class="btn-novo btn-cadastrar">Cadastrar serviço</NavLink>
+</div>
+
+@* ---------- filtros ---------- *@
+<section class="filtros">
+    <div class="campo campo-largo">
+        <label>Nome</label>
+        <input class="form-control" placeholder="Buscar serviço" @bind="busca" @bind:event="oninput" />
+    </div>
+    <div class="campo">
+        <label>Categoria</label>
+        <Seletor TItem="OpcaoId" TValor="int" Itens="OpcoesCategoria"
+                 @bind-Valor="idCategoria" TextoDe="o => o.Rotulo" ValorDe="o => o.Id" />
+    </div>
+    <div class="campo">
+        <label>Situação</label>
+        <Seletor TItem="Opcao" TValor="string" Itens="OpcoesSituacao"
+                 @bind-Valor="situacao" TextoDe="o => o.Rotulo" ValorDe="o => o.Valor"
+                 PontoDe="o => o.Cor" />
+    </div>
+    <div class="campo-acoes">
+        <button type="button" class="btn btn-outline-secondary" @onclick="Limpar">Limpar</button>
+    </div>
+</section>
+
+<div class="tabela fixa">
+    <table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Nome</th>
+            <th class="opcional">Categoria</th>
+            <th class="al-dir opcional">Duração</th>
+            <th class="al-dir">Preço</th>
+            <th class="al-dir opcional">Comissão</th>
+            <th class="al-dir opcional">Comissão %</th>
+            <th>Situação</th>
+            <th class="col-acoes">Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (Filtrados.Any())
+        {
+            foreach (var servico in Filtrados)
+            {
+                <tr>
+                    <td>@servico.NomeServico</td>
+                    <td class="opcional">@(servico.NomeCategoria ?? "—")</td>
+                    <td class="al-dir opcional">@servico.DuracaoServico min</td>
+                    <td class="al-dir">@servico.PrecoServico.ToString("C")</td>  @* mostra como moeda *@
+                    <td class="al-dir opcional">@servico.ComissaoEmReais.ToString("C")</td>
+                    <td class="al-dir opcional">@PercentualComissao(servico)</td>
+                    <td>
+                        <span class="status @(servico.Ativo ? "pago" : "cancelada")"><i></i>@(servico.Ativo ? "Ativo" : "Inativo")</span>
+                    </td>
+                    <td class="col-acoes">
+                        <AcoesLinha OnVisualizar="() => visualizando = servico"
+                                    OnEditar="() => Editar(servico)"
+                                    OnExcluir="() => excluindo = servico" />
+                    </td>
+                </tr>
+            }
+        }
+        else
+        {
+            <tr>
+                <td colspan="8" class="text-center text-muted">Nenhum serviço encontrado.</td>
+            </tr>
+        }
+    </tbody>
+    </table>
+</div>
+
+<ConfirmarModal Visivel="@(excluindo != null)" Titulo="Excluir serviço" Erro="@erroExclusao"
+                OnConfirmar="ConfirmarExclusao" OnCancelar="CancelarExclusao">
+    Tem certeza que deseja excluir <strong>@excluindo?.NomeServico</strong>?<br />
+    <span class="text-muted">Esta ação não pode ser desfeita.</span>
+</ConfirmarModal>
+
+<Janela Visivel="@(visualizando != null)" Titulo="@(visualizando?.NomeServico ?? "Serviço")"
+        OnFechar="Fechar">
+    <ChildContent>
+        @if (visualizando != null)
+        {
+            <dl class="ficha">
+                <div><dt>Preço</dt><dd>@visualizando.PrecoServico.ToString("C")</dd></div>
+                <div><dt>Duração</dt><dd>@visualizando.DuracaoServico min</dd></div>
+                <div><dt>Comissão</dt><dd>@visualizando.ComissaoTexto</dd></div>
+                <div><dt>Categoria</dt><dd>@(visualizando.NomeCategoria ?? "—")</dd></div>
+                <div><dt>Custo estimado</dt><dd>@(visualizando.CustoEstimado?.ToString("C") ?? "—")</dd></div>
+                <div><dt>Situação</dt><dd>@(visualizando.Ativo ? "Ativo" : "Inativo")</dd></div>
+            </dl>
+        }
+    </ChildContent>
+    <Rodape>
+        <button type="button" class="btn btn-outline-secondary" @onclick="Fechar">Fechar</button>
+        <button type="button" class="btn btn-primary" @onclick="() => Editar(visualizando!)">Editar</button>
+    </Rodape>
+</Janela>
+
+@code {
+    private Servico? excluindo;
+    private string? erroExclusao;
+
+    private void ConfirmarExclusao()
+    {
+        if (excluindo == null) return;
+
+        try
+        {
+            servicoDAO.Excluir(excluindo.IdServico);
+            excluindo = null;
+            erroExclusao = null;
+            CarregarServico();
+        }
+        catch (Exception ex)
+        {
+            erroExclusao = ex.Message;
+        }
+    }
+
+    private void CancelarExclusao()
+    {
+        excluindo = null;
+        erroExclusao = null;
+    }
+
+    private List<Servico> listaServico = new(); // 🔹 nome minúsculo (padrão)
+
+    private Servico? visualizando;
+
+    private string busca = "";
+    private int idCategoria;
+    private string situacao = "";
+
+    private List<Servico> Filtrados =>
+        listaServico
+            .Where(s => string.IsNullOrWhiteSpace(busca)
+                        || (s.NomeServico ?? "").Contains(busca.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Where(s => idCategoria == 0 || s.IdCategoria == idCategoria)
+            .Where(s => situacao == "" || s.Ativo == (situacao == "ATIVO"))
+            .OrderBy(s => s.NomeServico)
+            .ToList();
+
+    private List<OpcaoId> OpcoesCategoria =>
+        new List<OpcaoId> { new(0, "Todas") }
+            .Concat(listaServico
+                .Where(s => s.IdCategoria.HasValue)
+                .GroupBy(s => (Id: s.IdCategoria!.Value, Nome: s.NomeCategoria ?? "Sem nome"))
+                .OrderBy(g => g.Key.Nome)
+                .Select(g => new OpcaoId(g.Key.Id, g.Key.Nome)))
+            .ToList();
+
+    private static readonly List<Opcao> OpcoesSituacao = new()
+    {
+        new("", "Todos"),
+        new("ATIVO", "Ativos", "var(--ok)"),
+        new("INATIVO", "Inativos", "var(--texto-fraco)")
+    };
+
+    private void Limpar()
+    {
+        busca = "";
+        idCategoria = 0;
+        situacao = "";
+    }
+
+    /// <summary>A comissão é gravada em R$; o % sai sobre o preço do serviço.</summary>
+    private static string PercentualComissao(Servico s) =>
+        s.PrecoServico > 0 ? (s.ComissaoEmReais / (decimal)s.PrecoServico).ToString("P1") : "—";
+
+    protected override void OnInitialized()
+    {
+        CarregarServico();
+    }
+
+    private void CarregarServico()
+    {
+        try
+        {
+            listaServico = servicoDAO.ListarTodos();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Erro ao carregar serviços: " + ex.Message);
+        }
+    }
+
+    /// <summary>A edicao e uma pagina propria, com o mesmo formulario do cadastro.</summary>
+    private void Editar(Servico s) => Navigation.NavigateTo($"/servico/{s.IdServico}");
+
+    private void Fechar() => visualizando = null;
+
+}

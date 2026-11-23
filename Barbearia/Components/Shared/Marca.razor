@@ -1,0 +1,62 @@
+@* Marca generica, sem nome de ninguem.
+
+   Esta e a copia publica de demonstracao: a marca do cliente nao vem
+   junto. No lugar dela fica um pente, simbolo de barbearia que serve de
+   reserva -- e qualquer pessoa troca pela propria logo na tela Minha
+   conta, que ja aceita o envio de uma imagem.
+
+   O SVG vem embutido, e nao por <img>, para o desenho herdar
+   var(--marca) e acompanhar a cor escolhida e o tema. *@
+
+@if (Variante == Tipo.Completa)
+{
+    <div class="marca-completa @Class" style="@EstiloLargura">
+        <svg class="marca-simbolo" viewBox="0 0 680 180" xmlns="http://www.w3.org/2000/svg"
+             role="img" aria-label="Barbearia">
+            <path d="@Simbolo" />
+        </svg>
+        <span class="marca-palavra">Barbearia</span>
+    </div>
+}
+else if (Variante == Tipo.Compacta)
+{
+    <div class="marca-compacta @Class">
+        <svg class="marca-simbolo" viewBox="0 0 680 180" xmlns="http://www.w3.org/2000/svg"
+             aria-hidden="true">
+            <path d="@Simbolo" />
+        </svg>
+        <span class="marca-nome">Barbearia</span>
+    </div>
+}
+else
+{
+    <span class="marca-icone @Class" role="img" aria-label="Barbearia">
+        <svg viewBox="0 0 680 180" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="@Simbolo" />
+        </svg>
+    </span>
+}
+
+@code {
+    public enum Tipo { Completa, Compacta, Icone }
+
+    [Parameter] public Tipo Variante { get; set; } = Tipo.Completa;
+
+    /// <summary>Classes extras do chamador.</summary>
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>Largura em px da variante completa. Nulo deixa o CSS mandar.</summary>
+    [Parameter] public int? Largura { get; set; }
+
+    private string? EstiloLargura => Largura.HasValue ? $"width: {Largura}px" : null;
+
+    /// <summary>
+    /// O pente, num contorno so: lombada em cima e treze dentes embaixo.
+    ///
+    /// Internal porque o RelatorioPdf desenha o mesmo simbolo no cabecalho
+    /// do PDF. Por isso tambem e so M, L e Z, sem curva nenhuma: o
+    /// PdfSimples le esses tres comandos e ignora o resto -- uma curva
+    /// aqui sairia deformada no papel.
+    /// </summary>
+    internal const string Simbolo = "M 20 20 L 660 20 L 660 70 L 655 152 L 637 152 L 632 70 L 609 70 L 604 152 L 586 152 L 581 70 L 558 70 L 553 152 L 535 152 L 530 70 L 507 70 L 502 152 L 484 152 L 479 70 L 456 70 L 451 152 L 433 152 L 428 70 L 405 70 L 400 152 L 382 152 L 377 70 L 354 70 L 349 152 L 331 152 L 326 70 L 303 70 L 298 152 L 280 152 L 275 70 L 252 70 L 247 152 L 229 152 L 224 70 L 201 70 L 196 152 L 178 152 L 173 70 L 150 70 L 145 152 L 127 152 L 122 70 L 99 70 L 94 152 L 76 152 L 71 70 L 48 70 L 43 152 L 25 152 L 20 70 L 20 20 Z";
+}

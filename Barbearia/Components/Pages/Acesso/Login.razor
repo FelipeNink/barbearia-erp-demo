@@ -1,0 +1,264 @@
+@page "/login"
+@attribute [AllowAnonymous]
+
+@using Barbearia.Configs
+@using Barbearia.Models
+@using Barbearia.Services
+@inject UsuarioDAO usuarioDAO
+@inject SessaoDAO sessaoDAO
+@inject PermissaoDAO permissaoDAO
+@inject TentativaLoginDAO tentativas
+@inject LogDAO logs
+@inject NavigationManager Navigation
+@inject IHttpContextAccessor HttpContextAccessor
+
+
+<div class="login-vitrine">
+    <div class="login-faixa" aria-hidden="true"></div>
+
+    <main class="login-centro">
+        <div class="login-coluna">
+            <Marca Variante="Marca.Tipo.Completa" Class="login-logo" />
+
+            <EditForm Model="login" OnValidSubmit="Logar" FormName="formLogin">
+                <label for="usuario">
+                    Usuário
+                    <InputText id="usuario" @bind-Value="login.NomeUsuario"
+                               autocomplete="username" autocapitalize="none" spellcheck="false" />
+                </label>
+
+                <label for="senha">
+                    Senha
+                    @* A troca e feita em JS: a tela de login e renderizacao
+                       estatica, sem circuito Blazor para um @onclick responder. *@
+                    <span class="campo-senha">
+                        <InputText id="senha" @bind-Value="login.Senha" type="password"
+                                   autocomplete="current-password" />
+                        <button type="button" class="ver-senha" data-ver-senha="senha"
+                                aria-label="Mostrar senha" aria-pressed="false">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="olho-aberto">
+                                <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" />
+                                <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+                            </svg>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="olho-fechado">
+                                <path d="M9.9 5.2A10.6 10.6 0 0 1 12 5c6.4 0 10 7 10 7a18 18 0 0 1-3.2 4.2M6.6 6.6A18 18 0 0 0 2 12s3.6 7 10 7a10.5 10.5 0 0 0 5.4-1.4" />
+                                <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18" />
+                            </svg>
+                        </button>
+                    </span>
+                </label>
+
+                @if (!string.IsNullOrEmpty(erro))
+                {
+                    <div class="erro" role="alert">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+                        </svg>
+                        @erro
+                    </div>
+                }
+
+                <button type="submit" data-texto-enviando="Entrando…">Entrar</button>
+            </EditForm>
+
+            @* Aviso de demonstracao. Sai junto com esta copia: no sistema
+               de verdade nao ha nada disto na tela de entrada. *@
+            <section class="aviso-demo">
+                <h2>Demonstração</h2>
+
+                <p>Sistema de gestão para barbearia. Os dados são inventados
+                   e o banco é descartável.</p>
+
+                <dl class="acessos-demo">
+                    <div>
+                        <dt>Administrador</dt>
+                        <dd>
+                            <code>@Demonstracao.Usuario</code> ·
+                            <code>@Demonstracao.Senha</code>
+                            <span>vê o sistema inteiro</span>
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>Barbeiro</dt>
+                        <dd>
+                            <code>@DadosExemplo.LoginBarbeiro</code> ·
+                            <code>@DadosExemplo.SenhaBarbeiro</code>
+                            <span>só a própria agenda</span>
+                        </dd>
+                    </div>
+                </dl>
+
+            </section>
+        </div>
+    </main>
+
+    <footer class="login-rodape">&copy; Garotos de Programa</footer>
+</div>
+
+
+@code {
+    [SupplyParameterFromForm(FormName = "formLogin")]
+    private LoginModel login { get; set; } = new();
+
+    /// <summary>
+    /// Endereco que a pessoa tentou abrir sem estar logada, para voltar a
+    /// ele depois de entrar em vez de cair sempre no painel.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = AutenticacaoPorSessao.ParametroVolta)]
+    private string? Voltar { get; set; }
+
+    private string? erro;
+
+    /// <summary>
+    /// A mesma frase para usuario inexistente e para senha errada. O motivo
+    /// de verdade vai para o log: dizer "usuario nao existe" na tela entrega
+    /// quais logins existem a quem esta tentando adivinhar.
+    /// </summary>
+    private const string Generico = "Usuário ou senha inválidos.";
+
+    private void Logar()
+    {
+        erro = null;
+
+        var httpContext = HttpContextAccessor?.HttpContext;
+        if (httpContext == null)
+        {
+            erro = "Não foi possível iniciar a sessão. Recarregue a página.";
+            return;
+        }
+
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString();
+        var nomeTentado = (login.NomeUsuario ?? "").Trim();
+
+        if (string.IsNullOrWhiteSpace(nomeTentado) || string.IsNullOrWhiteSpace(login.Senha))
+        {
+            erro = "Informe usuário e senha.";
+            return;
+        }
+
+        var chaveUsuario = TentativaLoginDAO.ChaveDeUsuario(nomeTentado);
+        var chaveIp = TentativaLoginDAO.ChaveDeIp(ip);
+
+        UsuarioDAO.Tentativa tentativa;
+        try
+        {
+            // Bloqueio por tentativas vem antes de tocar na senha: quem
+            // esta barrado nao gasta nem a conferencia.
+            var barrado = tentativas.BloqueadoAte(chaveUsuario, chaveIp);
+            if (barrado.HasValue)
+            {
+                var minutos = TentativaLoginDAO.MinutosRestantes(barrado.Value);
+                erro = $"Muitas tentativas. Tente novamente em {minutos} minuto"
+                     + (minutos == 1 ? "." : "s.");
+                return;
+            }
+
+            tentativa = usuarioDAO.ValidarLogin(nomeTentado, login.Senha);
+        }
+        catch (Exception ex)
+        {
+            erro = "Erro ao entrar: " + ex.Message;
+            return;
+        }
+
+        if (!tentativa.Entrou)
+        {
+            var bloqueio = tentativas.RegistrarFalha(chaveUsuario, chaveIp);
+
+            logs.LoginFalhou(nomeTentado, tentativa.Motivo, ip, tentativa.Usuario?.IdUsr);
+
+            if (bloqueio.HasValue)
+            {
+                var minutos = TentativaLoginDAO.MinutosRestantes(bloqueio.Value);
+                logs.LoginBloqueado(nomeTentado, ip, minutos);
+
+                erro = $"Muitas tentativas. Tente novamente em {minutos} minuto"
+                     + (minutos == 1 ? "." : "s.");
+                return;
+            }
+
+            // Conta desativada tem recado proprio -- mas so depois de a
+            // senha estar certa, senao seria uma forma de descobrir quem
+            // existe no sistema.
+            erro = tentativa.Desfecho == UsuarioDAO.Resultado.Desativado
+                ? "Este acesso está desativado. Procure o administrador."
+                : Generico;
+
+            return;
+        }
+
+        var usuario = tentativa.Usuario!;
+
+        tentativas.Zerar(chaveUsuario, chaveIp);
+
+        var token = sessaoDAO.Criar(
+            usuario.IdUsr, ip, httpContext.Request.Headers.UserAgent.ToString());
+
+        AutenticacaoPorSessao.GravarCookie(
+            httpContext, token, DateTime.Now.Add(SessaoDAO.Duracao));
+
+        logs.Login(usuario, ip);
+
+        // Fora do try: NavigateTo lanca NavigationException internamente para
+        // sinalizar o redirecionamento no render estatico do servidor.
+        Navigation.NavigateTo(Destino(usuario), forceLoad: true);
+    }
+
+    /// <summary>
+    /// Para onde a pessoa vai depois de entrar.
+    ///
+    /// Senha provisoria manda direto para a troca. Senao, volta ao endereco
+    /// que ela tentou abrir -- validado como caminho interno, para o
+    /// parametro da URL nao virar redirecionamento para fora do sistema, e
+    /// conferido contra as permissoes dela.
+    ///
+    /// Sem endereco guardado, vai para o painel; e quem nao tem o painel
+    /// liberado cai na primeira tela que puder abrir, em vez de entrar
+    /// direto num aviso de falta de permissao.
+    /// </summary>
+    private string Destino(Usuario usuario)
+    {
+        if (usuario.TrocarSenhaUsr) return "/trocar-senha";
+
+        var permissoes = permissaoDAO.Carregar(usuario.IdUsr, usuario.EhAdmin);
+
+        if (!string.IsNullOrWhiteSpace(Voltar))
+        {
+            var pedido = Voltar.Trim();
+
+            var interno = pedido.StartsWith('/')
+                && !pedido.StartsWith("//")
+                && !pedido.StartsWith("/login", StringComparison.OrdinalIgnoreCase);
+
+            if (interno && PodeAbrir(permissoes, pedido)) return pedido;
+        }
+
+        if (permissoes.PodeVer("painel")) return "/";
+
+        var primeira = permissoes.TelasVisiveis().FirstOrDefault();
+
+        return primeira?.Rotas.FirstOrDefault() ?? "/";
+    }
+
+    /// <summary>
+    /// A tela desse caminho esta liberada? Caminho que nao pertence a tela
+    /// nenhuma -- a troca de senha, por exemplo -- passa: quem decide
+    /// aquilo nao e a matriz.
+    /// </summary>
+    private static bool PodeAbrir(Permissoes permissoes, string caminho)
+    {
+        var tela = Catalogo.PorRota(caminho);
+
+        return tela == null
+            || permissoes.Pode(tela.Chave, Catalogo.AcaoDaRota(caminho));
+    }
+
+    public class LoginModel
+    {
+        public string NomeUsuario { get; set; } = "";
+        public string Senha { get; set; } = "";
+    }
+}

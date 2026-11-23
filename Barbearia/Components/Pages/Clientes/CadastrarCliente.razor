@@ -1,0 +1,13 @@
+@page "/cliente/novo"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = Politicas.CriarCliente)]
+
+@using Barbearia.Models
+
+<PageTitle>Novo cliente</PageTitle>
+
+<FormCliente Modelo="cliente" Novo="true" />
+
+@code {
+    private readonly Cliente cliente = new();
+}

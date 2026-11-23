@@ -1,0 +1,141 @@
+.btn-espera {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.contador-espera {
+    min-width: 1.3rem;
+    padding: 0 0.35rem;
+    border-radius: 999px;
+    background: var(--superficie-3);
+    color: var(--texto-2);
+    font-size: 0.72rem;
+    font-weight: 800;
+    line-height: 1.3rem;
+    text-align: center;
+}
+
+.contador-espera.vaga {
+    background: var(--ok);
+    color: #fff;
+}
+
+.form-espera {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--borda);
+    border-radius: 10px;
+    background: var(--superficie-2);
+}
+
+.grade-espera {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem 1rem;
+}
+
+.campo-espera {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+}
+
+.campo-espera ::deep .seletor,
+.campo-espera ::deep .gatilho {
+    width: 100%;
+}
+
+.campo-espera.largo {
+    grid-column: 1 / -1;
+}
+
+.campo-espera label {
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--texto-3);
+}
+
+.form-espera-acoes {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.vazio-espera {
+    color: var(--texto-3);
+}
+
+.dia-espera {
+    margin: 1rem 0 0.4rem;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--texto-3);
+}
+
+.itens-espera {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.itens-espera li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.7rem 0.85rem;
+    border: 1px solid var(--borda);
+    border-radius: 10px;
+    margin-bottom: 0.5rem;
+}
+
+.itens-espera li.tem-vaga {
+    border-color: var(--ok-borda);
+    background: var(--ok-fundo);
+}
+
+.quem,
+.situacao {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+}
+
+.pedido {
+    font-size: 0.82rem;
+    color: var(--texto-2);
+}
+
+.suave {
+    font-size: 0.78rem;
+    color: var(--texto-3);
+}
+
+.acoes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    justify-content: flex-end;
+}
+
+@media (max-width: 640px) {
+    .grade-espera {
+        grid-template-columns: 1fr;
+    }
+
+    .itens-espera li {
+        grid-template-columns: 1fr;
+    }
+
+    .acoes {
+        justify-content: flex-start;
+    }
+}

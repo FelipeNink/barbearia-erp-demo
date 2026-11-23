@@ -1,0 +1,263 @@
+using Barbearia.Components;
+using Barbearia.Configs;
+using Barbearia.Models;
+using Barbearia.Data;
+using Barbearia.Services;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
+
+
+
+var builder = WebApplication.CreateBuilder(args);
+
+// O container nao traz LANG definido e o .NET cai na cultura invariante,
+// cujo simbolo de moeda e o "¤": todo ToString("C") saia com ele no lugar
+// do R$. Fixa pt-BR para moeda, data e separador decimal.
+var culturaPadrao = new System.Globalization.CultureInfo("pt-BR");
+System.Globalization.CultureInfo.DefaultThreadCurrentCulture = culturaPadrao;
+System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = culturaPadrao;
+
+// Hospedagem em container: Render, Railway, Fly e afins informam a porta
+// pela variavel PORT, mas o ASP.NET Core so olha para ASPNETCORE_URLS.
+var porta = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(porta))
+{
+    builder.WebHost.UseUrls($"http://+:{porta}");
+}
+
+// Atras de um proxy que termina o TLS, o pedido chega como http. Sem ler
+// o X-Forwarded-Proto, o UseHttpsRedirection abaixo entra em laco infinito
+// e o cookie de sessao nao e marcado como seguro.
+builder.Services.Configure<ForwardedHeadersOptions>(opcoes =>
+{
+    opcoes.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    opcoes.KnownNetworks.Clear();
+    opcoes.KnownProxies.Clear();
+});
+
+// Add services to the container.
+builder.Services.AddRazorComponents()
+    .AddInteractiveServerComponents();
+
+builder.Services.AddHttpContextAccessor();
+
+builder.Services.AddScoped<Conexao>();
+builder.Services.AddScoped<ServicoDAO>();
+builder.Services.AddScoped<FornecedorDAO>();
+builder.Services.AddScoped<FuncionarioDAO>();
+builder.Services.AddScoped<ProdutoDAO>();
+builder.Services.AddScoped<CompraDAO>();
+builder.Services.AddScoped<ClienteDAO>();
+builder.Services.AddScoped<PlanoDAO>();
+builder.Services.AddScoped<CategoriaDAO>();
+builder.Services.AddScoped<VendaDAO>();
+builder.Services.AddScoped<AgendamentoDAO>();
+builder.Services.AddScoped<AssinaturaDAO>();
+builder.Services.AddScoped<CaixaDAO>();
+builder.Services.AddScoped<DespesaDAO>();
+builder.Services.AddScoped<PainelDAO>();
+builder.Services.AddScoped<RelatoriosDAO>();
+builder.Services.AddScoped<FluxoCaixaDAO>();
+builder.Services.AddScoped<EstoqueDAO>();
+builder.Services.AddScoped<ComissaoDAO>();
+builder.Services.AddScoped<FolhaDAO>();
+builder.Services.AddScoped<ContaReceberDAO>();
+builder.Services.AddScoped<EsperaDAO>();
+builder.Services.AddScoped<UsuarioDAO>();
+builder.Services.AddScoped<SessaoDAO>();
+builder.Services.AddScoped<TentativaLoginDAO>();
+builder.Services.AddScoped<LogDAO>();
+builder.Services.AddScoped<HorarioDAO>();
+builder.Services.AddScoped<JornadaDAO>();
+builder.Services.AddScoped<AgendaOnlineDAO>();
+builder.Services.AddScoped<AvaliacaoDAO>();
+builder.Services.AddScoped<MarcaDAO>();
+builder.Services.AddScoped<BancoInicializador>();
+builder.Services.AddScoped<DadosExemplo>();
+builder.Services.AddScoped<Barbearia.Services.AuthenticationService>();
+builder.Services.AddScoped<RelatorioPdf>();
+builder.Services.AddHttpClient<BuscaCep>();
+
+// NFS-e: a venda so enfileira; o emissor envia e acompanha em segundo plano.
+builder.Services.AddScoped<NotaFiscalDAO>();
+builder.Services.AddHttpClient<FocusNfse>();
+builder.Services.AddHostedService<EmissorNotasFiscais>();
+
+// Autenticacao por token de sessao guardado no banco. Substitui a sessao
+// em memoria do ASP.NET Core, que sumia a cada deploy e nao permitia
+// derrubar o acesso de ninguem.
+builder.Services
+    .AddAuthentication(AutenticacaoPorSessao.Esquema)
+    .AddScheme<AuthenticationSchemeOptions, AutenticacaoPorSessao>(
+        AutenticacaoPorSessao.Esquema, null);
+
+// Exigir login e permissao e o padrao: uma tela nova nasce protegida, e
+// so sai da regra quem tiver [AllowAnonymous] escrito. O caminho oposto
+// -- lista de rotas publicas, como era antes -- deixa a porta aberta por
+// esquecimento.
+//
+// A exigencia da rota cobre todo endpoint que nao declarou politica
+// propria, inclusive os dezenove downloads de /relatorio e /excel.
+builder.Services.AddAuthorization(opcoes =>
+{
+    opcoes.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .AddRequirements(new ExigePermissaoDaRota())
+        .Build();
+});
+
+builder.Services.AddScoped<PermissaoDAO>();
+builder.Services.AddScoped<EquipeDAO>();
+builder.Services.AddScoped<FuncaoDAO>();
+builder.Services.AddScoped<Autorizacao>();
+builder.Services.AddScoped<IAuthorizationHandler, ManipuladorDeTela>();
+builder.Services.AddSingleton<IAuthorizationPolicyProvider, ProvedorDePoliticas>();
+
+// Entrega o estado de autenticacao aos componentes, inclusive dentro do
+// circuito, onde nao existe HttpContext.
+builder.Services.AddCascadingAuthenticationState();
+
+
+
+
+var app = builder.Build();
+
+// O relogio de tudo -- agenda, caixa, vendas, relatorios -- e o do
+// servidor. Fica no log da subida para conferir de cara se o TZ pegou.
+app.Logger.LogWarning("Fuso horário: {Fuso} (UTC{Deslocamento}), agora {Agora:dd/MM/yyyy HH:mm}.",
+    TimeZoneInfo.Local.Id, Conexao.FusoMySql(), DateTime.Now);
+
+// Cria o esquema e o primeiro login se o banco estiver vazio. Roda uma
+// vez, na subida, e nao faz nada quando as tabelas ja existem.
+using (var escopo = app.Services.CreateScope())
+{
+    escopo.ServiceProvider.GetRequiredService<BancoInicializador>().Preparar();
+
+    // Faxina do que so cresce: sessoes vencidas, contadores de tentativa de
+    // login ja sem efeito e log fora da retencao. Falhar aqui nao impede a
+    // aplicacao de subir -- e limpeza, nao requisito.
+    try
+    {
+        escopo.ServiceProvider.GetRequiredService<SessaoDAO>().LimparVencidas();
+        escopo.ServiceProvider.GetRequiredService<TentativaLoginDAO>().Limpar();
+        escopo.ServiceProvider.GetRequiredService<LogDAO>().AplicarRetencao();
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "A limpeza de sessões e logs não pôde ser feita.");
+    }
+}
+
+// Dados de exemplo pela linha de comando: carrega ou remove e sai, sem
+// subir o site. Ver Data/DadosExemplo.cs.
+if (args.Contains("--dados-exemplo") || args.Contains("--remover-exemplo"))
+{
+    using var escopo = app.Services.CreateScope();
+    var exemplo = escopo.ServiceProvider.GetRequiredService<DadosExemplo>();
+
+    if (args.Contains("--remover-exemplo")) exemplo.Remover(Console.WriteLine);
+    else exemplo.Carregar(Console.WriteLine);
+
+    return;
+}
+
+// Precisa vir antes de tudo que olha para o esquema ou o IP do pedido.
+app.UseForwardedHeaders();
+
+// Configure the HTTP request pipeline.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/Error", createScopeForErrors: true);
+    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
+
+app.UseAuthentication();
+
+// Senha provisoria obriga a trocar antes de usar o sistema. Sem isto,
+// bastava digitar outro endereco para passar direto pela tela de troca e
+// a senha definida pelo administrador viraria permanente.
+//
+// Fica antes da autorizacao para o redirecionamento ser para a troca de
+// senha, e nao para o aviso de falta de permissao.
+app.Use(async (contexto, proximo) =>
+{
+    var precisaTrocar = contexto.User
+        .FindFirst(AutenticacaoPorSessao.ClaimTrocarSenha)?.Value == "1";
+
+    if (precisaTrocar)
+    {
+        var caminho = contexto.Request.Path.Value ?? "/";
+
+        var liberado = caminho.StartsWith("/trocar-senha", StringComparison.OrdinalIgnoreCase)
+            || caminho.StartsWith("/logout", StringComparison.OrdinalIgnoreCase)
+            // Entrar como outra pessoa continua possivel sem antes ter de
+            // trocar a senha de quem esta logado.
+            || caminho.StartsWith("/login", StringComparison.OrdinalIgnoreCase)
+            || caminho.StartsWith("/_blazor", StringComparison.OrdinalIgnoreCase)
+            || caminho.StartsWith("/_framework", StringComparison.OrdinalIgnoreCase)
+            || Path.HasExtension(caminho);
+
+        if (!liberado)
+        {
+            contexto.Response.Redirect("/trocar-senha");
+            return;
+        }
+    }
+
+    await proximo();
+});
+
+app.UseAuthorization();
+
+app.UseAntiforgery();
+
+// CSS, fontes e scripts ficam fora da exigencia de login: a propria tela
+// de entrada precisa deles, e sem isto ela apareceria sem estilo nenhum.
+app.MapStaticAssets().AllowAnonymous();
+
+// Sonda de saude da hospedagem. O Railway so manda trafego para a versao
+// nova depois que isto responde 200, e reinicia o container se parar de
+// responder.
+//
+// De proposito nao toca no banco: se o MySQL cair por um instante, o
+// certo e a aplicacao continuar de pe mostrando o erro, e nao o host
+// derrubar o container e tirar todo mundo do ar.
+app.MapGet("/health", () => Results.Ok("ok")).AllowAnonymous();
+
+// Logo da barbearia, escolhida pelo administrador. Livre de login porque a
+// tela de entrada tambem mostra a logo. O endereco leva a versao (?v=), entao
+// o navegador pode guardar a imagem a vontade: logo nova, endereco novo.
+app.MapGet("/marca/logo", (MarcaDAO marca, HttpContext contexto) =>
+{
+    if (marca.LerLogo() is not { } logo) return Results.NotFound();
+
+    contexto.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+    // SVG aberto direto no navegador poderia rodar script: aqui nao roda.
+    contexto.Response.Headers.ContentSecurityPolicy = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+    contexto.Response.Headers.XContentTypeOptions = "nosniff";
+    return Results.File(logo.Conteudo, logo.Tipo);
+}).AllowAnonymous();
+
+app.MapearRelatorios();
+app.MapearExcel();
+// O script do Blazor (_framework/blazor.web.js) e o hub do circuito
+// (_blazor) sao servidos por aqui, nao pelo MapStaticAssets, e caiam na
+// FallbackPolicy: visitante sem login recebia 302 para /login, e as
+// paginas publicas interativas (/confirmar, /agendar) apareciam mas nao
+// respondiam a clique. Liberar so esses dois nao abre tela nenhuma:
+// dentro do circuito quem barra e o AuthorizeRouteView, pelo [Authorize]
+// de cada pagina, e as rotas das paginas seguem com a regra de sempre.
+app.MapRazorComponents<App>()
+    .AddInteractiveServerRenderMode()
+    .Add(endpoint =>
+    {
+        var padrao = (endpoint as RouteEndpointBuilder)?.RoutePattern.RawText?.TrimStart('/') ?? "";
+        if (padrao.StartsWith("_framework/") || padrao.StartsWith("_blazor"))
+            endpoint.Metadata.Add(new AllowAnonymousAttribute());
+    });
+
+app.Run();

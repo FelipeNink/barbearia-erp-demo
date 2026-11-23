@@ -1,0 +1,60 @@
+@page "/agendamento/novo"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = Politicas.CriarAgendamento)]
+
+<PageTitle>Novo agendamento</PageTitle>
+
+<TelaAgendamento Modelo="agendamento" Novo="true" IdEspera="IdEspera" />
+
+@code {
+    [SupplyParameterFromQuery(Name = "data")]
+    private DateTime? DataInicial { get; set; }
+
+    /// <summary>Clique num horario livre da agenda do painel: hora e profissional ja vem escolhidos.</summary>
+    [SupplyParameterFromQuery(Name = "hora")]
+    private string? HoraInicial { get; set; }
+
+    [SupplyParameterFromQuery(Name = "profissional")]
+    private int? IdProfissional { get; set; }
+
+    /// <summary>Vindo da lista de espera: cliente e servico ja escolhidos.</summary>
+    [SupplyParameterFromQuery(Name = "cliente")]
+    private int? IdCliente { get; set; }
+
+    [SupplyParameterFromQuery(Name = "servico")]
+    private int? IdServico { get; set; }
+
+    [SupplyParameterFromQuery(Name = "espera")]
+    private int? IdEspera { get; set; }
+
+    private readonly Agendamento agendamento = new();
+
+    protected override void OnInitialized()
+    {
+        // Vindo do calendario do painel: abre no dia clicado, de manha.
+        agendamento.DataHora = DataInicial is { } dia && dia.Date >= DateTime.Today
+            ? dia.Date.AddHours(9)
+            : ProximaMeiaHora();
+
+        // Horario ja passado nao serve: fica a sugestao acima.
+        if (DataInicial is { } data && TimeSpan.TryParse(HoraInicial, out var hora)
+            && data.Date + hora > DateTime.Now)
+            agendamento.DataHora = data.Date + hora;
+
+        if (IdProfissional is > 0) agendamento.IdFuncionario = IdProfissional.Value;
+        if (IdCliente is > 0) agendamento.IdCliente = IdCliente.Value;
+        if (IdServico is > 0)
+        {
+            agendamento.IdsServicos.Add(IdServico.Value);
+            agendamento.IdServico = IdServico.Value;
+        }
+    }
+
+    /// <summary>Sugere o proximo horario redondo de meia hora.</summary>
+    private static DateTime ProximaMeiaHora()
+    {
+        var agora = DateTime.Now;
+        var minutos = agora.Minute < 30 ? 30 : 60;
+        return agora.Date.AddHours(agora.Hour).AddMinutes(minutos);
+    }
+}

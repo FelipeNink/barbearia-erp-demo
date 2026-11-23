@@ -1,0 +1,511 @@
+@* Formulario de plano, o mesmo para criar e editar: dados do plano e o
+   que ele inclui. A edicao dos itens, que era uma tela a parte
+   (Componentes), mora aqui agora. *@
+
+@using Barbearia.Models
+@inject PlanoDAO planoDAO
+@inject ServicoDAO servicoDAO
+@inject ProdutoDAO produtoDAO
+@inject AssinaturaDAO assinaturaDAO
+@inject NavigationManager Navigation
+
+<div class="form-pagina com-previa">
+    <TopoForm Titulo="@(Novo ? "Novo plano" : "Editar plano")" Voltar="/plano" RotuloVoltar="Planos" />
+
+    @if (erro != null)
+    {
+        <div class="alert alert-danger" role="alert">@erro</div>
+    }
+
+    <div class="plano-layout">
+    <form @onsubmit="Salvar" novalidate>
+        <section class="cartao secao-form">
+            <h2>Dados do plano</h2>
+            <div class="grade-12">
+                <Campo Rotulo="Nome" Para="pln-nome" Colunas="8" Obrigatorio="true"
+                       Erro="@(tentouSalvar && string.IsNullOrWhiteSpace(Modelo.NomePlano) ? "Informe o nome." : null)">
+                    <input id="pln-nome" class="form-control" maxlength="200" placeholder="Ex.: Plano Híbrido"
+                           @bind="Modelo.NomePlano" />
+                </Campo>
+                <Campo Rotulo="Valor" Para="pln-valor" Colunas="3" Obrigatorio="true"
+                       Erro="@(tentouSalvar && valor <= 0 ? "Informe o valor do plano." : null)">
+                    <InputMoeda Id="pln-valor" @bind-Valor="valor" />
+                </Campo>
+
+                <Campo Rotulo="Descrição" Para="pln-descricao" Colunas="8">
+                    <input id="pln-descricao" class="form-control" maxlength="200"
+                           placeholder="Ex.: 4 cortes e 4 barbas por mês" @bind="Modelo.Descricao" />
+                </Campo>
+                <Campo Rotulo="Periodicidade" Colunas="4"
+                       Dica="@($"Os créditos valem {Periodicidade.Dias(Modelo.Periodicidade)} dias.")">
+                    <Seletor TItem="Opcao" TValor="string" Itens="OpcoesPeriodicidade"
+                             @bind-Valor="Modelo.Periodicidade" TextoDe="o => o.Rotulo" ValorDe="o => o.Valor" />
+                </Campo>
+
+                <Campo Rotulo="Comissão no atendimento do assinante" Colunas="6">
+                    <Seletor TItem="Opcao" TValor="string" Itens="OpcoesRegraComissao"
+                             @bind-Valor="Modelo.RegraComissaoAssinante" TextoDe="o => o.Rotulo" ValorDe="o => o.Valor" />
+                </Campo>
+                <Campo Rotulo="Situação" Para="pln-ativo" Colunas="3"
+                       Dica="Inativo não é mais vendido; assinaturas existentes continuam.">
+                    <div class="form-check form-switch campo-switch">
+                        <input id="pln-ativo" class="form-check-input" type="checkbox" role="switch" @bind="Modelo.Ativo" />
+                        <label class="form-check-label" for="pln-ativo">@(Modelo.Ativo ? "Ativo" : "Inativo")</label>
+                    </div>
+                </Campo>
+            </div>
+
+            @if (SomaItens > 0)
+            {
+                <div class="dica-preco">
+                    <span>Os itens somam <strong>@SomaItens.ToString("C")</strong> avulsos.</span>
+                    <button type="button" class="btn-link-acao" @onclick="UsarSomaComoPreco">
+                        Usar esse valor
+                    </button>
+                </div>
+            }
+        </section>
+
+        <section class="cartao secao-form">
+            <h2>O que o plano inclui</h2>
+
+            <p class="explicacao">
+                Escolha um serviço ou produto e quantas vezes ele cabe no plano.
+                Exemplo: 4 cortes e 4 barbas.
+            </p>
+
+            <div class="seletor">
+                <div class="abas">
+                    <button type="button" class="aba @(tipo == TipoItem.Servico ? "ativa" : "")"
+                            @onclick="@(() => TrocarTipo(TipoItem.Servico))">
+                        Serviços
+                    </button>
+                    <button type="button" class="aba @(tipo == TipoItem.Produto ? "ativa" : "")"
+                            @onclick="@(() => TrocarTipo(TipoItem.Produto))">
+                        Produtos
+                    </button>
+                </div>
+
+                <Seletor TItem="OpcaoId" TValor="int" Itens="OpcoesItem"
+                         @bind-Valor="idEscolhido" TextoDe="o => o.Rotulo" ValorDe="o => o.Id"
+                         Placeholder="Selecione…" />
+
+                <div class="contador">
+                    <button type="button" @onclick="() => AjustarNovo(-1)" disabled="@(quantidade <= 1)">−</button>
+                    <span>@quantidade</span>
+                    <button type="button" @onclick="() => AjustarNovo(1)">+</button>
+                </div>
+
+                <button type="button" class="btn btn-outline-secondary" disabled="@(idEscolhido <= 0)" @onclick="Adicionar">
+                    Adicionar
+                </button>
+            </div>
+
+            <div class="acao-montador">
+                @if (tipo == TipoItem.Servico)
+                {
+                    <button type="button" class="acao-campo" @onclick="() => modalAberto = CadastroRapido.TipoCadastro.Servico">
+                        + Cadastrar serviço
+                    </button>
+                }
+                else
+                {
+                    <button type="button" class="acao-campo" @onclick="() => modalAberto = CadastroRapido.TipoCadastro.Produto">
+                        + Cadastrar produto
+                    </button>
+                }
+            </div>
+
+            @if (itens.Count == 0)
+            {
+                <div class="vazio">
+                    Nenhum item adicionado. O plano pode ser salvo assim, mas não terá
+                    nada para lançar automaticamente na venda.
+                </div>
+            }
+            else
+            {
+                <ul class="itens">
+                    @foreach (var item in itens)
+                    {
+                        <li>
+                            <div class="item-info">
+                                <span class="item-nome">@item.Descricao</span>
+                                <span class="item-tipo">@item.RotuloTipo · @item.ValorUnitario.ToString("C") cada</span>
+                            </div>
+
+                            <div class="contador">
+                                @if (item.Ilimitado)
+                                {
+                                    <span title="Ilimitado">∞</span>
+                                }
+                                else
+                                {
+                                    <button type="button" @onclick="() => Ajustar(item, -1)" disabled="@(item.Quantidade <= 1)">−</button>
+                                    <span>@item.Quantidade</span>
+                                    <button type="button" @onclick="() => Ajustar(item, 1)">+</button>
+                                }
+                            </div>
+
+                            <label class="item-ilimitado">
+                                <input type="checkbox" class="form-check-input" checked="@item.Ilimitado"
+                                       @onchange="e => item.Quantidade = e.Value is true ? null : 1" />
+                                ilimitado
+                            </label>
+
+                            <span class="item-total">@(item.Ilimitado ? "—" : (item.ValorUnitario * item.Quantidade!.Value).ToString("C"))</span>
+
+                            <button type="button" class="remover" title="Remover" @onclick="() => itens.Remove(item)">×</button>
+                        </li>
+                    }
+                </ul>
+
+                <div class="rodape-itens">
+                    <span>@itens.Sum(i => i.Quantidade) item(ns) no plano</span>
+                    <strong>@SomaItens.ToString("C")</strong>
+                </div>
+
+                @if (valor > 0 && SomaItens > 0)
+                {
+                    <div class="comparativo @(Diferenca >= 0 ? "bom" : "ruim")">
+                        @if (Diferenca >= 0)
+                        {
+                            <text>O cliente economiza @Diferenca.ToString("C") por mês com este plano.</text>
+                        }
+                        else
+                        {
+                            <text>Atenção: o plano custa @Math.Abs(Diferenca).ToString("C") a mais que comprar avulso.</text>
+                        }
+                    </div>
+                }
+            }
+        </section>
+
+        <RodapeForm Cancelar="/plano" Salvando="salvando" />
+    </form>
+
+    @* Como a assinatura deste plano aparece para o cliente, montada ao vivo. *@
+    <aside class="previa-plano" aria-label="Prévia da assinatura">
+        <div class="previa-cartao">
+            <header class="previa-topo">
+                <span class="previa-sobre">Assinatura · @ResumoItens</span>
+                <strong class="previa-nome">@(string.IsNullOrWhiteSpace(Modelo.NomePlano) ? "Nome do plano" : Modelo.NomePlano)</strong>
+                <span class="previa-preco">@valor.ToString("C") <small>@PorPeriodo</small></span>
+            </header>
+
+            <div class="previa-corpo">
+                @if (itens.Count == 0)
+                {
+                    <p class="previa-vazia">Adicione serviços ou produtos para ver os créditos do assinante.</p>
+                }
+                else
+                {
+                    @foreach (var item in itens)
+                    {
+                        <div class="previa-item">
+                            <span class="previa-item-nome">@item.Descricao</span>
+                            <div class="creditos">
+                                @if (item.Ilimitado)
+                                {
+                                    <span class="credito ilimitado">∞ ilimitado</span>
+                                }
+                                else
+                                {
+                                    @for (var n = 1; n <= Math.Min(item.Quantidade!.Value, MaxCaixas); n++)
+                                    {
+                                        <span class="credito">@n</span>
+                                    }
+                                    @if (item.Quantidade!.Value > MaxCaixas)
+                                    {
+                                        <span class="credito mais">+@(item.Quantidade.Value - MaxCaixas)</span>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <div class="previa-bloco">
+                        <span>Créditos por ciclo</span>
+                        <strong class="previa-total">@(itens.Any(i => i.Ilimitado) && TotalCreditos == 0 ? "∞" : TotalCreditos.ToString())</strong>
+                    </div>
+                }
+
+                <div class="previa-bloco validade">
+                    <div class="validade-linha">
+                        <span>Válida por <strong>@Periodicidade.Dias(Modelo.Periodicidade) dias</strong></span>
+                        <small>a partir da venda</small>
+                    </div>
+                    <div class="barra"><i></i></div>
+                </div>
+
+                @if (valor > 0 && Diferenca > 0)
+                {
+                    <p class="previa-economia">O assinante economiza <strong>@Diferenca.ToString("C")</strong> por ciclo.</p>
+                }
+
+                @if (!Novo)
+                {
+                    <div class="previa-assinantes">
+                        <h3>Assinantes</h3>
+                        @if (assinantes.Count == 0)
+                        {
+                            <p class="previa-vazia">Ninguém assinou este plano ainda.</p>
+                        }
+                        else
+                        {
+                            <ul>
+                                @foreach (var a in assinantes.Take(5))
+                                {
+                                    <li>
+                                        <span>@(a.NomeCliente ?? "—")</span>
+                                        @if (a.Vencida)
+                                        {
+                                            <span class="selo-expirada">Expirada</span>
+                                        }
+                                        else
+                                        {
+                                            <small>@(a.DataFim.HasValue ? $"vence {a.DataFim:dd/MM}" : "sem prazo")</small>
+                                        }
+                                    </li>
+                                }
+                            </ul>
+                            @if (assinantes.Count > 5)
+                            {
+                                <a href="/assinaturas" class="previa-ver-todos">e mais @(assinantes.Count - 5) · ver todas</a>
+                            }
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </aside>
+    </div>
+</div>
+
+<CadastroRapido Visivel="@(modalAberto != null)"
+                Tipo="@(modalAberto ?? CadastroRapido.TipoCadastro.Servico)"
+                OnCriado="AoCriarRegistro"
+                OnCancelado="() => modalAberto = null" />
+
+@code {
+    [Parameter, EditorRequired] public Plano Modelo { get; set; } = new();
+    [Parameter] public bool Novo { get; set; }
+
+    /// <summary>Itens ja gravados, na edicao.</summary>
+    [Parameter] public List<PlanoItem>? ItensIniciais { get; set; }
+
+    /// <summary>Servicos ou produtos, conforme o tipo escolhido, com o preco no rotulo.</summary>
+    private List<OpcaoId> OpcoesItem =>
+        tipo == TipoItem.Servico
+            ? servicos.Where(s => s.Ativo).Select(s => new OpcaoId(s.IdServico,
+                $"{s.NomeServico} — {s.PrecoServico.ToString("C")}")).ToList()
+            : produtos.Where(p => p.Ativo).Select(p => new OpcaoId(p.IdProduto,
+                $"{p.NomeProduto} — {p.Valor.ToString("C")}")).ToList();
+
+    private static readonly List<Opcao> OpcoesPeriodicidade =
+        Periodicidade.Todas.Select(p => new Opcao(p.Valor, p.Rotulo)).ToList();
+
+    private static readonly List<Opcao> OpcoesRegraComissao =
+        RegraComissaoAssinante.Todas.Select(r => new Opcao(r.Valor, r.Rotulo)).ToList();
+
+    private CadastroRapido.TipoCadastro? modalAberto;
+    private decimal valor;
+    private string? erro;
+    private bool tentouSalvar;
+    private bool salvando;
+
+    private List<Servico> servicos = new();
+    private List<Produto> produtos = new();
+    private List<PlanoItem> itens = new();
+
+    private string tipo = TipoItem.Servico;
+    private int idEscolhido;
+    private int quantidade = 1;
+
+    /// <summary>Item ilimitado nao tem preco avulso somavel: fica fora da comparacao.</summary>
+    private decimal SomaItens => itens.Where(i => !i.Ilimitado).Sum(i => i.ValorUnitario * i.Quantidade!.Value);
+    private decimal Diferenca => SomaItens - valor;
+
+    /// <summary>Acima disto a fila de caixinhas vira "+N".</summary>
+    private const int MaxCaixas = 8;
+
+    /// <summary>Assinaturas ativas deste plano, para a previa na edicao.</summary>
+    private List<Assinatura> assinantes = new();
+
+    private int TotalCreditos => itens.Where(i => !i.Ilimitado).Sum(i => i.Quantidade!.Value);
+
+    /// <summary>Linha de cima do cartao, ex.: "4 Corte + 4 Barba · mensal".</summary>
+    private string ResumoItens =>
+        itens.Count == 0
+            ? Periodicidade.Rotulo(Modelo.Periodicidade).ToLower()
+            : string.Join(" + ", itens.Select(i => i.Ilimitado ? $"{i.Descricao} ilimitado" : $"{i.Quantidade} {i.Descricao}"))
+              + " · " + Periodicidade.Rotulo(Modelo.Periodicidade).ToLower();
+
+    private string PorPeriodo => Modelo.Periodicidade switch
+    {
+        "TRIMESTRAL" => "/ trimestre",
+        "SEMESTRAL" => "/ semestre",
+        "ANUAL" => "/ ano",
+        _ => "/ mês"
+    };
+
+    protected override void OnInitialized()
+    {
+        valor = Math.Round((decimal)(Modelo.Valor ?? 0), 2);
+        itens = ItensIniciais?.ToList() ?? new();
+
+        try
+        {
+            servicos = servicoDAO.ListarTodos() ?? new();
+            produtos = produtoDAO.ListarTodos() ?? new();
+
+            if (!Novo)
+                assinantes = assinaturaDAO.ListarTodas()
+                    .Where(a => a.IdPlano == Modelo.IdPlano && a.Status == StatusAssinatura.Ativa)
+                    .ToList();
+        }
+        catch (Exception ex)
+        {
+            erro = "Erro ao carregar os cadastros: " + ex.Message;
+        }
+    }
+
+    private void TrocarTipo(string novo)
+    {
+        tipo = novo;
+        idEscolhido = 0;
+    }
+
+    /// <summary>
+    /// Recarrega a lista e já seleciona o que acabou de ser criado,
+    /// preservando os itens que já estavam montados no plano.
+    /// </summary>
+    private void AoCriarRegistro(int id)
+    {
+        try
+        {
+            erro = null;
+
+            if (modalAberto == CadastroRapido.TipoCadastro.Servico)
+            {
+                servicos = servicoDAO.ListarTodos() ?? new();
+                tipo = TipoItem.Servico;
+            }
+            else
+            {
+                produtos = produtoDAO.ListarTodos() ?? new();
+                tipo = TipoItem.Produto;
+            }
+
+            idEscolhido = id;
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+        finally
+        {
+            modalAberto = null;
+        }
+    }
+
+    private void AjustarNovo(int delta) => quantidade = Math.Max(1, quantidade + delta);
+
+    private void Ajustar(PlanoItem item, int delta)
+    {
+        if (item.Quantidade is int atual) item.Quantidade = Math.Max(1, atual + delta);
+    }
+
+    private void UsarSomaComoPreco() => valor = SomaItens;
+
+    private void Adicionar()
+    {
+        erro = null;
+
+        if (idEscolhido <= 0)
+        {
+            erro = "Selecione um serviço ou produto.";
+            return;
+        }
+
+        string descricao;
+        decimal valorUnitario;
+
+        if (tipo == TipoItem.Servico)
+        {
+            var s = servicos.FirstOrDefault(x => x.IdServico == idEscolhido);
+            if (s == null) { erro = "Serviço não encontrado."; return; }
+            descricao = s.NomeServico ?? "Serviço";
+            valorUnitario = (decimal)s.PrecoServico;
+        }
+        else
+        {
+            var p = produtos.FirstOrDefault(x => x.IdProduto == idEscolhido);
+            if (p == null) { erro = "Produto não encontrado."; return; }
+            descricao = p.NomeProduto ?? "Produto";
+            valorUnitario = (decimal)p.Valor;
+        }
+
+        // Item repetido soma na linha existente em vez de duplicar.
+        var existente = itens.FirstOrDefault(i => i.TipoItem == tipo && i.IdReferencia == idEscolhido);
+        if (existente != null)
+        {
+            existente.Quantidade += quantidade;
+        }
+        else
+        {
+            itens.Add(new PlanoItem
+            {
+                TipoItem = tipo,
+                IdReferencia = idEscolhido,
+                Quantidade = quantidade,
+                Descricao = descricao,
+                ValorUnitario = valorUnitario
+            });
+        }
+
+        idEscolhido = 0;
+        quantidade = 1;
+    }
+
+    private void Salvar()
+    {
+        tentouSalvar = true;
+        erro = null;
+
+        if (string.IsNullOrWhiteSpace(Modelo.NomePlano) || valor <= 0)
+        {
+            erro = "Confira os campos destacados.";
+            return;
+        }
+
+        try
+        {
+            salvando = true;
+            Modelo.NomePlano = Modelo.NomePlano.Trim();
+            Modelo.Valor = valor;
+
+            if (Novo)
+            {
+                var idPlano = planoDAO.Inserir(Modelo);
+                if (itens.Count > 0) planoDAO.SalvarItens(idPlano, itens);
+            }
+            else
+            {
+                // Substitui os itens: o que foi removido aqui sai do plano.
+                planoDAO.Atualizar(Modelo);
+                planoDAO.SalvarItens(Modelo.IdPlano, itens);
+            }
+
+            Navigation.NavigateTo("/plano");
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+        finally
+        {
+            salvando = false;
+        }
+    }
+}

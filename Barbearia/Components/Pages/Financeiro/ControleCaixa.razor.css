@@ -1,0 +1,361 @@
+.cartao {
+    background: var(--superficie);
+    border: 1px solid var(--borda-suave);
+    border-radius: 10px;
+    padding: 1.25rem;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+}
+
+.cartao h2 {
+    margin: 0 0 1rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--texto);
+}
+
+.explicacao {
+    margin: 0 0 1rem;
+    font-size: 0.85rem;
+    color: var(--texto-3);
+}
+
+/* ---------- abertura ---------- */
+
+.abertura {
+    max-width: 760px;
+    margin-bottom: 2rem;
+}
+
+.linha-abertura {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.linha-abertura .cresce {
+    flex: 1;
+    min-width: 200px;
+}
+
+.linha-abertura label,
+.grade-movimento label {
+    display: block;
+    margin-bottom: 0.3rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--texto-fraco);
+}
+
+/* ---------- cabecalho do caixa aberto ---------- */
+
+.cabecalho-caixa {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+}
+
+.etiqueta {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.etiqueta.aberto {
+    background: var(--ok-fundo);
+    color: var(--ok-escuro);
+}
+
+.titulo-caixa {
+    margin-left: 0.6rem;
+    font-size: 1.05rem;
+    color: var(--texto);
+}
+
+.desde {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.8rem;
+    color: var(--texto-fraco);
+}
+
+.btn-fechar {
+    padding: 0.6rem 1.5rem;
+    background: var(--perigo-escuro);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.btn-fechar:hover {
+    background: var(--perigo-escuro);
+}
+
+/* ---------- painel ---------- */
+
+.painel-caixa {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 2rem;
+    align-items: start;
+}
+
+.gaveta {
+}
+
+.linhas > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.4rem 0;
+    font-size: 0.88rem;
+    color: var(--texto-2);
+    border-bottom: 1px solid var(--superficie-2);
+}
+
+.linhas .mais {
+    color: var(--ok);
+    font-weight: 600;
+}
+
+.linhas .menos {
+    color: var(--perigo-escuro);
+    font-weight: 600;
+}
+
+.linhas .total {
+    margin-top: 0.4rem;
+    padding-top: 0.6rem;
+    border-top: 2px solid var(--borda-suave);
+    border-bottom: none;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--texto);
+}
+
+.linhas .total.positivo span:last-child {
+    color: var(--ok-escuro);
+}
+
+.linhas .total.negativo span:last-child {
+    color: var(--perigo-escuro);
+}
+
+.linhas.secundaria {
+    margin-top: 1.25rem;
+    padding-top: 0.75rem;
+    border-top: 2px dashed var(--borda-suave);
+}
+
+.nota-rodape {
+    margin: 0.85rem 0 0;
+    font-size: 0.78rem;
+    color: var(--texto-fraco);
+    font-style: italic;
+}
+
+/* ---------- movimentos ---------- */
+
+/* Flex com quebra: no cartao largo fica numa linha so; no estreito
+   desce para a linha de baixo em vez de vazar do cartao. */
+.grade-movimento {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.grade-movimento > ::deep * {
+    flex: 1 1 120px;
+    min-width: 0;
+}
+
+.grade-movimento > .btn {
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+
+.movimentos {
+    list-style: none;
+    margin: 1.25rem 0 0;
+    padding: 0;
+}
+
+.movimentos li {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.5rem 0;
+    font-size: 0.85rem;
+    border-top: 1px solid var(--borda-suave);
+}
+
+.movimentos .hora {
+    font-size: 0.78rem;
+    color: var(--texto-fraco);
+}
+
+.movimentos .descricao {
+    color: var(--texto-2);
+}
+
+.movimentos .mais {
+    color: var(--ok);
+    font-weight: 600;
+}
+
+.movimentos .menos {
+    color: var(--perigo-escuro);
+    font-weight: 600;
+}
+
+.vazio {
+    margin: 1.25rem 0 0;
+    padding: 1rem;
+    background: var(--superficie-2);
+    border: 1px dashed var(--borda-3);
+    border-radius: 8px;
+    font-size: 0.85rem;
+    color: var(--texto-fraco);
+    text-align: center;
+}
+
+/* ---------- historico ---------- */
+
+.titulo-secao {
+    margin: 2rem 0 1rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--texto);
+}
+
+.dir {
+    text-align: right;
+}
+
+td.confere { color: var(--ok-escuro); font-weight: 600; }
+td.sobra   { color: var(--alerta); font-weight: 600; }
+td.falta   { color: var(--perigo-escuro); font-weight: 600; }
+
+/* ---------- fechamento ---------- */
+
+.fundo-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
+    padding: 1.5rem;
+}
+
+.modal-fechamento {
+    width: 100%;
+    max-width: 440px;
+    background: var(--superficie);
+    border-radius: 10px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+}
+
+.modal-topo {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--borda-suave);
+}
+
+.modal-topo h5 {
+    margin: 0;
+    font-weight: 700;
+    color: var(--texto);
+}
+
+.modal-corpo {
+    padding: 1.25rem;
+}
+
+.modal-corpo label {
+    display: block;
+    margin-bottom: 0.3rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--texto-fraco);
+}
+
+.modal-corpo ::deep .form-control {
+    margin-bottom: 1rem;
+}
+
+.modal-corpo ::deep .campo-grande {
+    font-size: 1.4rem !important;
+    font-weight: 700;
+    text-align: center;
+}
+
+.resultado {
+    padding: 1rem;
+    margin-bottom: 1.25rem;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 1.1rem;
+}
+
+.resultado.confere { background: var(--ok-fundo); color: var(--ok-escuro); }
+.resultado.sobra   { background: var(--alerta-fundo); color: var(--alerta); }
+.resultado.falta   { background: var(--perigo-fundo); color: var(--perigo-escuro); }
+
+.comprovante {
+    display: block;
+    margin-top: 1.25rem;
+    text-align: center;
+}
+
+.modal-rodape {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    padding: 0.9rem 1.25rem;
+    border-top: 1px solid var(--borda-suave);
+}
+
+@media (max-width: 900px) {
+    .grade-movimento {
+        flex-direction: column;
+    }
+
+    .grade-movimento > ::deep *,
+    .grade-movimento > .btn {
+        flex: none;
+        margin-left: 0;
+    }
+}
+
+/* Falta sem administrador: explica por que o botao nao fecha. */
+.aviso-falta {
+    margin: 10px 0 0;
+    padding: 10px 12px;
+    border-radius: var(--raio);
+    background: var(--perigo-fundo);
+    color: var(--perigo-escuro);
+    font-size: 13.5px;
+    font-weight: 600;
+}
+
+.modal-corpo .obrigatorio {
+    color: var(--perigo);
+}

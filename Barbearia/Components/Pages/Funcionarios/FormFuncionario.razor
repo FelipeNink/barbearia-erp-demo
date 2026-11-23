@@ -1,0 +1,595 @@
+@* Formulario de funcionario, o mesmo para criar e editar. *@
+
+@using Barbearia.Configs
+@using Barbearia.Models
+@inject FuncionarioDAO funcionarioDAO
+@inject ServicoDAO servicoDAO
+@inject JornadaDAO jornadaDAO
+@inject HorarioDAO horarioDAO
+@inject FuncaoDAO funcaoDAO
+@inject Autorizacao permissao
+@inject AuthenticationService auth
+@inject NavigationManager Navigation
+
+<div class="form-pagina">
+    <TopoForm Titulo="@(Novo ? "Novo funcionário" : "Editar funcionário")" Voltar="/funcionario" RotuloVoltar="Funcionários" />
+
+    @if (erro != null)
+    {
+        <div class="alert alert-danger" role="alert">@erro</div>
+    }
+
+    <form @onsubmit="Salvar" novalidate>
+        <section class="cartao secao-form">
+            <h2>Dados pessoais</h2>
+            <div class="grade-12">
+                <Campo Rotulo="Nome" Para="fun-nome" Colunas="8" Obrigatorio="true"
+                       Erro="@(tentouSalvar && string.IsNullOrWhiteSpace(Modelo.NomeFuncionario) ? "Informe o nome." : null)">
+                    <input id="fun-nome" class="form-control" maxlength="100" @bind="Modelo.NomeFuncionario" />
+                </Campo>
+                <Campo Rotulo="Data de nascimento" Para="fun-nasc" Colunas="4">
+                    <input id="fun-nasc" type="date" class="form-control" @bind="Modelo.DataNascimento" />
+                </Campo>
+
+                <Campo Rotulo="CPF" Para="fun-cpf" Colunas="4" Erro="@Documentos.ErroCpf(Modelo.CPF)">
+                    <input id="fun-cpf" class="form-control" inputmode="numeric" data-mascara="cpf"
+                           placeholder="000.000.000-00" @bind="Modelo.CPF" />
+                </Campo>
+                <Campo Rotulo="RG" Para="fun-rg" Colunas="4">
+                    <input id="fun-rg" class="form-control" maxlength="7" @bind="Modelo.RG" />
+                </Campo>
+                <Campo Rotulo="CTPS" Para="fun-ctps" Colunas="4">
+                    <input id="fun-ctps" class="form-control" maxlength="12" inputmode="numeric" data-mascara="ctps"
+                           placeholder="0000000/0000" @bind="Modelo.CTPS" />
+                </Campo>
+            </div>
+        </section>
+
+        <section class="cartao secao-form">
+            <h2>Contato</h2>
+            <div class="grade-12">
+                <Campo Rotulo="Telefone" Para="fun-tel" Colunas="4" Erro="@Documentos.ErroTelefone(Modelo.Telefone)">
+                    <input id="fun-tel" class="form-control" inputmode="tel" data-mascara="telefone"
+                           placeholder="(69) 99999-9999" @bind="Modelo.Telefone" />
+                </Campo>
+                <Campo Rotulo="E-mail" Para="fun-email" Colunas="6" Erro="@Documentos.ErroEmail(Modelo.Email)">
+                    <input id="fun-email" type="email" class="form-control" maxlength="100"
+                           placeholder="nome@exemplo.com" @bind="Modelo.Email" />
+                </Campo>
+            </div>
+        </section>
+
+        <CamposEndereco Modelo="Modelo" Prefixo="fun" />
+
+        <section class="cartao secao-form">
+            <h2>Contrato</h2>
+            <div class="grade-12">
+                <Campo Rotulo="Cargo" Colunas="3">
+                    <ChildContent>
+                        <Seletor TItem="OpcaoId" TValor="int" Itens="OpcoesCargo"
+                                 Valor="@(Modelo.IdCargo ?? 0)"
+                                 ValorChanged="@(v => Modelo.IdCargo = v == 0 ? null : v)"
+                                 TextoDe="o => o.Rotulo" ValorDe="o => o.Id" />
+                    </ChildContent>
+                    <Acao>
+                        @if (permissao.Pode("funcoes", Acao.Criar))
+                        {
+                            <button type="button" class="acao-campo" @onclick="() => criandoCargo = true">
+                                + Cadastrar cargo
+                            </button>
+                        }
+                    </Acao>
+                </Campo>
+                <Campo Rotulo="Admissão" Para="fun-admissao" Colunas="3">
+                    <input id="fun-admissao" type="date" class="form-control" @bind="Modelo.DataAdmissao" />
+                </Campo>
+                <Campo Rotulo="Desligamento" Para="fun-desligamento" Colunas="3"
+                       Erro="@(Modelo.DataDesligamento < Modelo.DataAdmissao ? "Antes da admissão." : null)">
+                    <input id="fun-desligamento" type="date" class="form-control" @bind="Modelo.DataDesligamento" />
+                </Campo>
+                <Campo Rotulo="Situação" Para="fun-ativo" Colunas="3"
+                       Dica="Inativo some da venda e da agenda.">
+                    <div class="form-check form-switch campo-switch">
+                        <input id="fun-ativo" class="form-check-input" type="checkbox" role="switch" @bind="Modelo.Ativo" />
+                        <label class="form-check-label" for="fun-ativo">@(Modelo.Ativo ? "Ativo" : "Inativo")</label>
+                    </div>
+                </Campo>
+                <Campo Rotulo="Acesso ao sistema" Colunas="6"
+                       Dica="O login é ligado ao profissional na tela Equipe.">
+                    <input class="form-control" readonly value="@(Modelo.LoginVinculado ?? "Sem login vinculado")" />
+                </Campo>
+                <Campo Rotulo="Cor na agenda" Para="fun-cor" Colunas="2">
+                    <input id="fun-cor" type="color" class="form-control form-control-color"
+                           value="@(Modelo.CorAgenda ?? "#6c757d")" @onchange="e => Modelo.CorAgenda = e.Value?.ToString()" />
+                </Campo>
+            </div>
+        </section>
+
+        <section class="cartao secao-form">
+            <h2>Remuneração</h2>
+            <div class="grade-12">
+                <Campo Rotulo="Salário fixo mensal" Para="fun-salario" Colunas="3"
+                       Dica="Somado às comissões na folha. Zero para quem trabalha só por comissão.">
+                    <InputMoeda Id="fun-salario" @bind-Valor="Modelo.SalarioFixo" />
+                </Campo>
+                <Campo Rotulo="Recebe comissão de serviço?" Para="fun-recebe-serv" Colunas="3">
+                    <div class="form-check form-switch campo-switch">
+                        <input id="fun-recebe-serv" class="form-check-input" type="checkbox" role="switch"
+                               @bind="Modelo.RecebeComissaoServico" />
+                        <label class="form-check-label" for="fun-recebe-serv">@(Modelo.RecebeComissaoServico ? "Sim" : "Não")</label>
+                    </div>
+                </Campo>
+                @if (Modelo.RecebeComissaoServico)
+                {
+                    <Campo Rotulo="Comissão em serviços (%)" Para="fun-com-serv" Colunas="3"
+                           Dica="Vale no lugar da comissão do serviço. Zero usa a de cada serviço."
+                           Erro="@(Modelo.ComissaoServicoPadrao > 100 ? "No máximo 100%." : null)">
+                        <InputMoeda Id="fun-com-serv" Percentual="true" @bind-Valor="Modelo.ComissaoServicoPadrao" />
+                    </Campo>
+                }
+                <Campo Rotulo="Recebe comissão de produto?" Para="fun-recebe-prod" Colunas="3">
+                    <div class="form-check form-switch campo-switch">
+                        <input id="fun-recebe-prod" class="form-check-input" type="checkbox" role="switch"
+                               @bind="Modelo.RecebeComissaoProduto" />
+                        <label class="form-check-label" for="fun-recebe-prod">@(Modelo.RecebeComissaoProduto ? "Sim" : "Não")</label>
+                    </div>
+                </Campo>
+                @if (Modelo.RecebeComissaoProduto)
+                {
+                    <Campo Rotulo="Comissão em produtos (%)" Para="fun-com-prod" Colunas="3"
+                           Dica="Vale no lugar da comissão do produto. Zero usa a de cada produto."
+                           Erro="@(Modelo.ComissaoProdutoPadrao > 100 ? "No máximo 100%." : null)">
+                        <InputMoeda Id="fun-com-prod" Percentual="true" @bind-Valor="Modelo.ComissaoProdutoPadrao" />
+                    </Campo>
+                }
+                <Campo Rotulo="Chave PIX" Para="fun-pix" Colunas="4">
+                    <input id="fun-pix" class="form-control" maxlength="100" @bind="Modelo.ChavePix" />
+                </Campo>
+                <Campo Rotulo="Dados bancários" Para="fun-banco" Colunas="8">
+                    <input id="fun-banco" class="form-control" maxlength="300"
+                           placeholder="Banco, agência e conta" @bind="Modelo.DadosBancarios" />
+                </Campo>
+                <Campo Rotulo="Vínculo" Colunas="4"
+                       Dica="MEI é o parceiro da Lei do Salão-Parceiro, com CNPJ próprio.">
+                    <Seletor TItem="Opcao" TValor="string" Itens="OpcoesVinculo"
+                             Valor="@(Modelo.Vinculo ?? string.Empty)"
+                             ValorChanged="@(v => { Modelo.Vinculo = string.IsNullOrEmpty(v) ? null : v; Modelo.Parceiro = v == VinculoFuncionario.Mei; })"
+                             TextoDe="o => o.Rotulo" ValorDe="o => o.Valor" />
+                </Campo>
+                @if (Modelo.Parceiro)
+                {
+                    <Campo Rotulo="CNPJ do parceiro" Para="fun-cnpj-parceiro" Colunas="4"
+                           Erro="@(tentouSalvar && !Documentos.CnpjValido(Modelo.CnpjParceiro) ? "Informe um CNPJ válido." : null)">
+                        <input id="fun-cnpj-parceiro" class="form-control" inputmode="numeric" data-mascara="cnpj"
+                               placeholder="00.000.000/0000-00" @bind="Modelo.CnpjParceiro" />
+                    </Campo>
+                }
+            </div>
+        </section>
+
+        <section class="cartao secao-form">
+            <h2>Serviços que realiza</h2>
+            <p class="explicacao">
+                Marque o que este profissional faz. Comissão e preço próprios são opcionais.
+                A comissão própria vale só para aquele serviço; em branco, vale o % do
+                profissional (em Remuneração) ou, sem ele, a do serviço.
+            </p>
+
+            @if (servicos.Count == 0)
+            {
+                <p class="suave">Nenhum serviço cadastrado.</p>
+            }
+            else
+            {
+                <div class="tabela">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th></th>
+                                <th>Serviço</th>
+                                <th class="al-dir">Preço do serviço</th>
+                                <th>Comissão própria</th>
+                                <th>Preço próprio</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var s in servicos.Where(s => s.Ativo || realiza.ContainsKey(s.IdServico)))
+                            {
+                                var marcado = realiza.TryGetValue(s.IdServico, out var proprio);
+                                <tr>
+                                    <td>
+                                        <input type="checkbox" class="form-check-input" checked="@marcado"
+                                               aria-label="@($"Realiza {s.NomeServico}")"
+                                               @onchange="e => Marcar(s.IdServico, e.Value is true)" />
+                                    </td>
+                                    <td>@s.NomeServico</td>
+                                    <td class="al-dir">@s.PrecoServico.ToString("C")</td>
+                                    <td>
+                                        @if (marcado)
+                                        {
+                                            <div class="d-flex align-items-center gap-1">
+                                                <InputMoeda Valor="proprio!.Comissao ?? 0" Percentual="@s.ComissaoPercentual"
+                                                            ValorChanged="v => proprio!.Comissao = v == 0 ? null : v" />
+                                                <span class="suave">@(s.ComissaoPercentual ? "%" : "R$")</span>
+                                            </div>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (marcado)
+                                        {
+                                            <InputMoeda Valor="proprio!.Preco ?? 0"
+                                                        ValorChanged="v => proprio!.Preco = v == 0 ? null : v" />
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="cartao secao-form">
+            <h2>Jornada de trabalho</h2>
+            <p class="explicacao">
+                Dias e horários em que atende. A agenda avisa quando um horário cai fora
+                da jornada ou no almoço, sem bloquear. Começa igual ao horário da barbearia.
+            </p>
+
+            <div class="tabela">
+                <table class="table tabela-jornada">
+                    <thead>
+                        <tr>
+                            <th>Dia</th>
+                            <th>Trabalha?</th>
+                            <th>Entrada</th>
+                            <th>Saída</th>
+                            <th>Almoço (opcional)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var d in Expediente.OrdemDaSemana.Select(dia => jornada[(int)dia]))
+                        {
+                            <tr class="@(d.Trabalha ? "" : "folga")">
+                                <td>@Expediente.NomeDia[(int)d.Dia]</td>
+                                <td>
+                                    <div class="form-check form-switch">
+                                        <input id="jor-@((int)d.Dia)" class="form-check-input" type="checkbox" role="switch"
+                                               @bind="d.Trabalha" />
+                                        <label class="form-check-label" for="jor-@((int)d.Dia)">@(d.Trabalha ? "Sim" : "Folga")</label>
+                                    </div>
+                                </td>
+                                <td>
+                                    <input type="time" class="form-control" disabled="@(!d.Trabalha)"
+                                           value="@Expediente.Hora(d.Entrada)" @onchange="e => d.Entrada = Ler(e, d.Entrada)" />
+                                </td>
+                                <td>
+                                    <input type="time" class="form-control" disabled="@(!d.Trabalha)"
+                                           value="@Expediente.Hora(d.Saida)" @onchange="e => d.Saida = Ler(e, d.Saida)" />
+                                </td>
+                                <td>
+                                    <div class="almoco">
+                                        <input type="time" class="form-control" disabled="@(!d.Trabalha)" aria-label="Início do almoço"
+                                               value="@(d.AlmocoInicio is { } ai ? Expediente.Hora(ai) : "")"
+                                               @onchange="e => d.AlmocoInicio = LerOpcional(e)" />
+                                        <span class="suave">às</span>
+                                        <input type="time" class="form-control" disabled="@(!d.Trabalha)" aria-label="Fim do almoço"
+                                               value="@(d.AlmocoFim is { } af ? Expediente.Hora(af) : "")"
+                                               @onchange="e => d.AlmocoFim = LerOpcional(e)" />
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="cartao secao-form">
+            <h2>Folgas e bloqueios</h2>
+            <p class="explicacao">
+                Férias, folga avulsa, "saio às 15h hoje". A agenda avisa quem tentar marcar nesse período.
+            </p>
+
+            @if (bloqueios.Count == 0)
+            {
+                <p class="suave">Nenhum bloqueio daqui para a frente.</p>
+            }
+            else
+            {
+                <ul class="lista-bloqueios">
+                    @foreach (var b in bloqueios.OrderBy(b => b.Inicio))
+                    {
+                        <li>
+                            <span><strong>@b.Periodo</strong> @(string.IsNullOrWhiteSpace(b.Motivo) ? "" : $"· {b.Motivo}")</span>
+                            <button type="button" class="btn btn-link" @onclick="() => RemoverBloqueio(b)">Remover</button>
+                        </li>
+                    }
+                </ul>
+            }
+
+            <div class="grade-12 novo-bloqueio">
+                <Campo Rotulo="De" Colunas="3">
+                    <input type="datetime-local" class="form-control" @bind="novoInicio" />
+                </Campo>
+                <Campo Rotulo="Até" Colunas="3" Erro="@erroBloqueio">
+                    <input type="datetime-local" class="form-control" @bind="novoFim" />
+                </Campo>
+                <Campo Rotulo="Motivo" Colunas="4">
+                    <input class="form-control" maxlength="100" placeholder="Férias, médico, folga…" @bind="novoMotivo" />
+                </Campo>
+                <div class="c-2 acao-bloqueio">
+                    <button type="button" class="btn btn-outline-secondary" @onclick="AdicionarBloqueio">Adicionar</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="cartao secao-form">
+            <h2>Foto</h2>
+            <div class="grade-12">
+                <Campo Rotulo="Foto do profissional" Colunas="6" Dica="JPG, PNG ou WebP, até 1 MB." Erro="@erroFoto">
+                    <InputFile class="form-control" accept="image/jpeg,image/png,image/webp" OnChange="EscolherFoto" />
+                </Campo>
+                <div class="c-6">
+                    @if (fotoDataUrl != null)
+                    {
+                        <img src="@fotoDataUrl" alt="Foto de @Modelo.NomeFuncionario"
+                             style="max-height: 120px; border-radius: 8px;" />
+                        <button type="button" class="btn btn-link" @onclick="TirarFoto">Remover foto</button>
+                    }
+                </div>
+            </div>
+        </section>
+
+        <RodapeForm Cancelar="/funcionario" Salvando="salvando" />
+    </form>
+</div>
+
+<Janela Visivel="@criandoCargo" Titulo="Novo cargo" Erro="@erroCargo" OnFechar="FecharCargo">
+    <ChildContent>
+        <div class="campo-janela">
+            <label class="form-label">Nome</label>
+            <input class="form-control" maxlength="60" placeholder="Barbeiro, Recepção…"
+                   @bind="nomeCargo" />
+        </div>
+    </ChildContent>
+    <Rodape>
+        <button type="button" class="btn btn-outline-secondary" @onclick="FecharCargo">Cancelar</button>
+        <button type="button" class="btn btn-primary" @onclick="CriarCargo">Salvar</button>
+    </Rodape>
+</Janela>
+
+@code {
+    [Parameter, EditorRequired] public Funcionario Modelo { get; set; } = new();
+    [Parameter] public bool Novo { get; set; }
+
+    private string? erro;
+    private bool tentouSalvar;
+    private bool salvando;
+
+    private List<Servico> servicos = new();
+
+    /// <summary>Servicos marcados, por id, com a comissao e o preco proprios.</summary>
+    private Dictionary<int, FuncionarioServico> realiza = new();
+
+    // Foto: so vai para o banco no Salvar, junto com o resto.
+    private string? fotoDataUrl;
+    private (string Tipo, byte[] Conteudo)? fotoNova;
+    private bool removerFoto;
+    private string? erroFoto;
+
+    // Jornada e bloqueios: tambem so vao para o banco no Salvar.
+    private List<JornadaDia> jornada = Enum.GetValues<DayOfWeek>().Select(d => new JornadaDia { Dia = d }).ToList();
+    private List<BloqueioFuncionario> bloqueios = new();
+    private List<int> bloqueiosRemovidos = new();
+    private DateTime novoInicio = DateTime.Today.AddHours(DateTime.Now.Hour + 1);
+    private DateTime novoFim = DateTime.Today.AddHours(DateTime.Now.Hour + 2);
+    private string? novoMotivo;
+    private string? erroBloqueio;
+
+    // Cargos cadastrados em Configurações → Cargos, os mesmos da Equipe.
+    private List<Funcao> cargos = new();
+    private bool criandoCargo;
+    private string nomeCargo = "";
+    private string? erroCargo;
+
+    private List<OpcaoId> OpcoesCargo =>
+        new List<OpcaoId> { new(0, "Não informado") }
+            .Concat(cargos.Select(c => new OpcaoId(c.IdFuncao, c.Nome)))
+            .ToList();
+
+    private static List<Opcao> OpcoesVinculo =>
+        new List<Opcao> { new("", "Não informado") }
+            .Concat(VinculoFuncionario.Todos.Select(v => new Opcao(v.Valor, v.Rotulo)))
+            .ToList();
+
+    protected override void OnInitialized()
+    {
+        try
+        {
+            servicos = servicoDAO.ListarTodos().OrderBy(s => s.NomeServico).ToList();
+            cargos = funcaoDAO.Listar();
+
+            if (!Novo)
+            {
+                realiza = funcionarioDAO.ListarServicos(Modelo.IdFuncionario).ToDictionary(s => s.IdServico);
+
+                if (Modelo.TemFoto && funcionarioDAO.BuscarFoto(Modelo.IdFuncionario) is { } foto)
+                    fotoDataUrl = $"data:{foto.Tipo};base64,{Convert.ToBase64String(foto.Conteudo)}";
+
+                bloqueios = jornadaDAO.ListarBloqueios(Modelo.IdFuncionario, DateTime.Now);
+            }
+
+            jornada = (Novo ? null : jornadaDAO.Listar(Modelo.IdFuncionario))
+                      ?? Disponibilidade.CopiarDaBarbearia(horarioDAO.Listar());
+        }
+        catch (Exception ex)
+        {
+            erro = "Erro ao carregar os dados do profissional: " + ex.Message;
+        }
+    }
+
+    private void CriarCargo()
+    {
+        erroCargo = null;
+
+        try
+        {
+            var id = funcaoDAO.Criar(nomeCargo, new Autor(
+                auth.GetUsuarioId() ?? 0, auth.GetUsuarioNome() ?? "",
+                auth.EhAdmin(), auth.EhRaiz()));
+
+            cargos = funcaoDAO.Listar();
+            Modelo.IdCargo = id;
+            FecharCargo();
+        }
+        catch (Exception ex)
+        {
+            erroCargo = ex.Message;
+        }
+    }
+
+    private void FecharCargo()
+    {
+        criandoCargo = false;
+        nomeCargo = "";
+        erroCargo = null;
+    }
+
+    private void Marcar(int idServico, bool marcado)
+    {
+        if (marcado) realiza.TryAdd(idServico, new FuncionarioServico { IdServico = idServico });
+        else realiza.Remove(idServico);
+    }
+
+    private static TimeSpan Ler(ChangeEventArgs e, TimeSpan atual) =>
+        TimeSpan.TryParse(e.Value?.ToString(), out var hora) ? hora : atual;
+
+    /// <summary>Campo de hora apagado vira null (almoco sem horario).</summary>
+    private static TimeSpan? LerOpcional(ChangeEventArgs e) =>
+        TimeSpan.TryParse(e.Value?.ToString(), out var hora) ? hora : null;
+
+    private void AdicionarBloqueio()
+    {
+        erroBloqueio = null;
+
+        if (novoFim <= novoInicio)
+        {
+            erroBloqueio = "O fim deve ser depois do início.";
+            return;
+        }
+
+        bloqueios.Add(new BloqueioFuncionario
+        {
+            Inicio = novoInicio,
+            Fim = novoFim,
+            Motivo = Vazio(novoMotivo)
+        });
+        novoMotivo = null;
+    }
+
+    private void RemoverBloqueio(BloqueioFuncionario b)
+    {
+        if (b.IdBloqueio > 0) bloqueiosRemovidos.Add(b.IdBloqueio);
+        bloqueios.Remove(b);
+    }
+
+    private async Task EscolherFoto(InputFileChangeEventArgs e)
+    {
+        erroFoto = null;
+        var arquivo = e.File;
+
+        if (!arquivo.ContentType.StartsWith("image/"))
+        {
+            erroFoto = "Escolha uma imagem.";
+            return;
+        }
+
+        if (arquivo.Size > FuncionarioDAO.TamanhoMaximoFoto)
+        {
+            erroFoto = "A foto pode ter no máximo 1 MB.";
+            return;
+        }
+
+        using var memoria = new MemoryStream();
+        await arquivo.OpenReadStream(FuncionarioDAO.TamanhoMaximoFoto).CopyToAsync(memoria);
+
+        fotoNova = (arquivo.ContentType, memoria.ToArray());
+        removerFoto = false;
+        fotoDataUrl = $"data:{arquivo.ContentType};base64,{Convert.ToBase64String(fotoNova.Value.Conteudo)}";
+    }
+
+    private void TirarFoto()
+    {
+        fotoNova = null;
+        fotoDataUrl = null;
+        removerFoto = true;
+    }
+
+    private void Salvar()
+    {
+        tentouSalvar = true;
+        erro = null;
+
+        var temErro =
+            string.IsNullOrWhiteSpace(Modelo.NomeFuncionario)
+            || Documentos.ErroCpf(Modelo.CPF) != null
+            || Documentos.ErroTelefone(Modelo.Telefone) != null
+            || Documentos.ErroEmail(Modelo.Email) != null
+            || Documentos.ErroCep(Modelo.Cep) != null
+            || Modelo.ComissaoServicoPadrao > 100
+            || Modelo.ComissaoProdutoPadrao > 100
+            || Modelo.DataDesligamento < Modelo.DataAdmissao
+            || (Modelo.Parceiro && !Documentos.CnpjValido(Modelo.CnpjParceiro));
+
+        if (temErro)
+        {
+            erro = "Confira os campos destacados.";
+            return;
+        }
+
+        if (Disponibilidade.ErroJornada(jornada) is string erroJornada)
+        {
+            erro = "Jornada de trabalho — " + erroJornada;
+            return;
+        }
+
+        try
+        {
+            salvando = true;
+
+            Modelo.NomeFuncionario = Modelo.NomeFuncionario!.Trim();
+            Modelo.CPF = Vazio(Documentos.FormatarCpf(Modelo.CPF));
+            Modelo.Telefone = Vazio(Documentos.FormatarTelefone(Modelo.Telefone));
+            Modelo.Email = Vazio(Modelo.Email);
+            Modelo.Cep = Vazio(Documentos.FormatarCep(Modelo.Cep));
+            Modelo.ChavePix = Vazio(Modelo.ChavePix);
+            Modelo.DadosBancarios = Vazio(Modelo.DadosBancarios);
+            Modelo.CnpjParceiro = Modelo.Parceiro ? Vazio(Documentos.FormatarCnpj(Modelo.CnpjParceiro)) : null;
+
+            var id = Modelo.IdFuncionario;
+            if (Novo) id = funcionarioDAO.Inserir(Modelo);
+            else funcionarioDAO.Atualizar(Modelo);
+
+            funcionarioDAO.SalvarServicos(id, realiza.Values);
+            jornadaDAO.Salvar(id, jornada);
+            jornadaDAO.SalvarBloqueios(id, bloqueios, bloqueiosRemovidos);
+
+            if (fotoNova is { } foto) funcionarioDAO.SalvarFoto(id, foto.Tipo, foto.Conteudo);
+            else if (removerFoto) funcionarioDAO.RemoverFoto(id);
+
+            Navigation.NavigateTo("/funcionario");
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+        finally
+        {
+            salvando = false;
+        }
+    }
+
+    private static string? Vazio(string? texto) =>
+        string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
+}

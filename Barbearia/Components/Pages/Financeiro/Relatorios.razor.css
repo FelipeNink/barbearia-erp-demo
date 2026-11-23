@@ -1,0 +1,301 @@
+/* ---------- escolha do relatorio ---------- */
+
+.escolha-relatorio {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.6rem;
+    margin-bottom: 1.1rem;
+}
+
+.opcao-relatorio {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.8rem 0.95rem;
+    background: var(--superficie);
+    border: 1px solid var(--borda);
+    border-radius: var(--raio-cartao);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.opcao-relatorio strong {
+    font-family: var(--fonte-titulo);
+    font-size: 1.1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--texto);
+}
+
+.opcao-relatorio span {
+    font-size: 0.78rem;
+    line-height: 1.3;
+    color: var(--texto-3);
+}
+
+.opcao-relatorio:hover {
+    border-color: var(--marca-fraca);
+}
+
+.opcao-relatorio.ativa {
+    background: var(--morno-2);
+    border-color: var(--marca);
+    box-shadow: var(--anel-foco);
+}
+
+.opcao-relatorio.ativa strong {
+    color: var(--marca-escura);
+}
+
+.nota-relatorio {
+    margin: 0 0 1rem;
+    font-size: 0.8rem;
+    color: var(--texto-fraco);
+}
+
+/* Servicos / produtos dentro de "Mais vendidos". */
+.abas-relatorio {
+    display: inline-flex;
+    gap: 0.2rem;
+    margin-bottom: 0.85rem;
+    padding: 0.22rem;
+    background: var(--superficie-3);
+    border-radius: 9px;
+}
+
+.abas-relatorio button {
+    padding: 0.38rem 0.9rem;
+    background: none;
+    border: none;
+    border-radius: 7px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--texto-3);
+    cursor: pointer;
+}
+
+.abas-relatorio button.ativa {
+    background: var(--superficie);
+    color: var(--marca-escura);
+    box-shadow: var(--sombra);
+}
+
+/* ---------- barra de participação e ocupação ---------- */
+
+.col-participacao {
+    width: 150px;
+}
+
+.col-participacao .barra {
+    display: block;
+    height: 7px;
+    border-radius: 999px;
+    background: var(--superficie-3);
+    overflow: hidden;
+}
+
+.col-participacao .barra i {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--marca);
+}
+
+/* Agenda quase cheia muda de cor: é o aviso de que não cabe mais
+   ninguém naquele profissional. */
+.col-participacao .barra.cheia i {
+    background: var(--ok);
+}
+
+.col-participacao .percentual {
+    display: block;
+    margin-top: 3px;
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    color: var(--texto-3);
+}
+
+/* ---------- mais vendidos ---------- */
+
+.pelo-plano {
+    display: block;
+    margin-top: 2px;
+    font-size: 11.5px;
+    color: var(--roxo-texto);
+}
+
+/* ---------- clientes inativos ---------- */
+
+.nunca {
+    font-size: 12.5px;
+    color: var(--texto-fraco);
+}
+
+/* ---------- dinheiro nas tabelas ---------- */
+
+.dinheiro {
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 760px) {
+    .col-participacao {
+        width: 96px;
+    }
+
+    .faixa-inativos .contagem {
+        margin-left: 0;
+        width: 100%;
+    }
+}
+
+/* ---------- graficos do faturamento (vieram do painel) ---------- */
+
+.graficos {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1.25rem;
+    align-items: stretch;
+    margin-bottom: 1.25rem;
+}
+
+.cartao {
+    background: var(--superficie);
+    border: 1px solid var(--borda-suave);
+    border-radius: 10px;
+    padding: 1.25rem 1.25rem 1rem;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+    display: flex;
+    flex-direction: column;
+}
+
+.cartao-topo {
+    margin-bottom: 1rem;
+}
+
+.cartao-topo h2 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--texto);
+}
+
+.cartao-sub {
+    font-size: 0.78rem;
+    color: var(--texto-fraco);
+}
+
+/* Altura fixa + maintainAspectRatio:false = o Chart.js respeita este tamanho.
+   Sem flex:1 aqui: o stretch do grid sobrescreveria a altura. */
+.area-grafico {
+    position: relative;
+    height: 300px;
+    flex: 0 0 300px;
+}
+
+.area-grafico canvas {
+    max-width: 100%;
+}
+
+@media (max-width: 1100px) {
+    .graficos {
+        grid-template-columns: 1fr;
+    }
+
+    .area-grafico {
+        height: 260px;
+        flex: 0 0 260px;
+    }
+}
+
+/* Inativo que recusou mensagens: no lugar do botao de WhatsApp. */
+.nao-aceita {
+    font-size: 12px;
+    color: var(--texto-fraco);
+    white-space: nowrap;
+}
+
+/* ---------- avaliacoes ---------- */
+
+.media-estrela {
+    font-weight: 700;
+    color: var(--marca-escura);
+    white-space: nowrap;
+}
+
+/* Barra empilhada das notas, da 5 (verde) a 1 (vermelha). */
+.distribuicao {
+    display: flex;
+    width: 100%;
+    max-width: 260px;
+    height: 10px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--superficie-3);
+}
+
+.distribuicao i { display: block; height: 100%; }
+.distribuicao .n5 { background: var(--ok); }
+.distribuicao .n4 { background: #84cc16; }
+.distribuicao .n3 { background: #eab308; }
+.distribuicao .n2 { background: #f97316; }
+.distribuicao .n1 { background: var(--perigo); }
+
+.titulo-secao-relatorio {
+    margin: 1.75rem 0 0.75rem;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--texto);
+}
+
+.lista-avaliacoes {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    background: var(--superficie);
+    border: 1px solid var(--borda-suave);
+    border-radius: var(--raio-cartao);
+}
+
+.lista-avaliacoes li {
+    display: flex;
+    gap: 14px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--borda-suave);
+}
+
+.lista-avaliacoes li:first-child {
+    border-top: none;
+}
+
+.lista-avaliacoes li.baixa {
+    background: var(--perigo-fundo);
+}
+
+.estrelas-avaliacao {
+    flex-shrink: 0;
+    width: 92px;
+    font-size: 16px;
+    letter-spacing: 1px;
+    color: var(--marca);
+}
+
+.quem-avaliou {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.quem-avaliou small {
+    font-size: 12.5px;
+    color: var(--texto-3);
+}
+
+.comentario-avaliacao {
+    margin-top: 4px;
+    font-style: italic;
+    color: var(--texto-2);
+}

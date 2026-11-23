@@ -1,0 +1,233 @@
+﻿@page "/cliente"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = Politicas.Clientes)]
+
+@using Barbearia.Configs
+@using Barbearia.Models
+@inject ClienteDAO clienteDAO
+@inject NavigationManager Navigation
+
+
+<h1 class="titulo-listagem">Gestão de Clientes</h1>
+
+<div class="barra-acoes barra-listagem">
+    <BotaoExportar Href="/relatorio/clientes" />
+    <BotaoExportar Tipo="BotaoExportar.Formato.Excel" Href="/excel/clientes" />
+    <NavLink href="/cliente/novo" class="btn-novo btn-cadastrar">Cadastrar cliente</NavLink>
+</div>
+
+@* ---------- filtros ---------- *@
+<section class="filtros">
+    <div class="campo campo-largo">
+        <label>Nome, telefone ou CPF</label>
+        <input class="form-control" placeholder="Buscar cliente" @bind="busca" @bind:event="oninput" />
+    </div>
+    <div class="campo">
+        <label>Profissional preferido</label>
+        <Seletor TItem="OpcaoId" TValor="int" Itens="OpcoesProfissional"
+                 @bind-Valor="idProfissional" TextoDe="o => o.Rotulo" ValorDe="o => o.Id"
+                 ContagemDe="o => o.Contagem" ComAvatar="true" />
+    </div>
+    <div class="campo">
+        <label>Situação</label>
+        <Seletor TItem="Opcao" TValor="string" Itens="OpcoesSituacao"
+                 @bind-Valor="situacao" TextoDe="o => o.Rotulo" ValorDe="o => o.Valor"
+                 PontoDe="o => o.Cor" />
+    </div>
+    <div class="campo-acoes">
+        <button type="button" class="btn btn-outline-secondary" @onclick="Limpar">Limpar</button>
+    </div>
+</section>
+
+<div class="tabela fixa">
+    <table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Nome</th>
+            <th>Telefone</th>
+            <th class="opcional">Profissional preferido</th>
+            <th class="opcional">Última visita</th>
+            <th class="al-dir opcional">Visitas</th>
+            <th class="al-dir">Total gasto</th>
+            <th class="col-acoes">Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (Filtrados.Any())
+        {
+            foreach (var cliente in Filtrados)
+            {
+                <tr>
+                    <td>
+                        @cliente.NomeCliente
+                        @if (!cliente.Ativo)
+                        {
+                            <span class="status cancelada"><i></i>inativo</span>
+                        }
+                    </td>
+                    <td>@Valor(cliente.Telefone)</td>
+                    <td class="opcional">@Valor(cliente.NomeProfissionalPreferido)</td>
+                    <td class="opcional"><span class="data">@Valor(cliente.UltimaVisita?.ToString("dd/MM/yyyy"))</span></td>
+                    <td class="al-dir opcional">@cliente.Visitas</td>
+                    <td class="al-dir">@cliente.TotalGasto.ToString("C")</td>
+                    <td class="col-acoes">
+                        <AcoesLinha OnVisualizar="() => visualizando = cliente"
+                                    OnEditar="() => Editar(cliente)"
+                                    OnExcluir="() => excluindo = cliente" />
+                    </td>
+                </tr>
+            }
+        }
+        else
+        {
+            <tr>
+                <td colspan="7" class="text-center text-muted">Nenhum cliente encontrado.</td>
+            </tr>
+        }
+    </tbody>
+    </table>
+</div>
+
+<ConfirmarModal Visivel="@(excluindo != null)" Titulo="Excluir cliente" Erro="@erroExclusao"
+                OnConfirmar="ConfirmarExclusao" OnCancelar="CancelarExclusao">
+    Tem certeza que deseja excluir <strong>@excluindo?.NomeCliente</strong>?<br />
+    <span class="text-muted">Esta ação não pode ser desfeita.</span>
+</ConfirmarModal>
+
+<Janela Visivel="@(visualizando != null)" Titulo="@(visualizando?.NomeCliente ?? "Cliente")"
+        OnFechar="Fechar">
+    <ChildContent>
+        @if (visualizando != null)
+        {
+            <dl class="ficha">
+                <div><dt>Telefone</dt><dd>@Valor(visualizando.Telefone)</dd></div>
+                <div><dt>CPF</dt><dd>@Valor(visualizando.CPF)</dd></div>
+                <div><dt>RG</dt><dd>@Valor(visualizando.RG)</dd></div>
+                <div><dt>CEP</dt><dd>@Valor(visualizando.Cep)</dd></div>
+                <div><dt>Nascimento</dt><dd>@Valor(visualizando.DataNascimento?.ToString("dd/MM/yyyy"))</dd></div>
+                <div><dt>E-mail</dt><dd>@Valor(visualizando.Email)</dd></div>
+                <div><dt>Como conheceu</dt><dd>@Valor(visualizando.Origem == null ? null : OrigemCliente.Rotulo(visualizando.Origem))</dd></div>
+                <div><dt>Situação</dt><dd>@(visualizando.Ativo ? "Ativo" : "Inativo")</dd></div>
+                <div class="largo"><dt>Plano</dt><dd>@Valor(visualizando.NomePlano)</dd></div>
+                <div class="largo">
+                    <dt>Endereço</dt>
+                    <dd>@Valor(string.Join(", ", new[] { visualizando.Rua, visualizando.Numero, visualizando.Bairro, visualizando.Cidade, visualizando.Estado }.Where(p => !string.IsNullOrWhiteSpace(p))))</dd>
+                </div>
+                <div class="largo"><dt>Observações</dt><dd>@Valor(visualizando.Observacoes)</dd></div>
+            </dl>
+        }
+    </ChildContent>
+    <Rodape>
+        <button type="button" class="btn btn-outline-secondary" @onclick="Fechar">Fechar</button>
+        <button type="button" class="btn btn-primary" @onclick="() => Editar(visualizando!)">Editar</button>
+    </Rodape>
+</Janela>
+
+@code {
+    private Cliente? excluindo;
+    private string? erroExclusao;
+
+    private void ConfirmarExclusao()
+    {
+        if (excluindo == null) return;
+
+        try
+        {
+            clienteDAO.Excluir(excluindo.IdCliente);
+            excluindo = null;
+            erroExclusao = null;
+            CarregarClientes();
+        }
+        catch (Exception ex)
+        {
+            erroExclusao = ex.Message;
+        }
+    }
+
+    private void CancelarExclusao()
+    {
+        excluindo = null;
+        erroExclusao = null;
+    }
+
+    private List<Cliente> listaCliente = new();
+
+    private Cliente? visualizando;
+
+
+    private string busca = "";
+    private int idProfissional;
+    private string situacao = "";
+
+    private List<Cliente> Filtrados
+    {
+        get
+        {
+            var termo = busca.Trim();
+            var digitos = new string(termo.Where(char.IsDigit).ToArray());
+
+            return listaCliente
+                .Where(c => termo == ""
+                            || (c.NomeCliente ?? "").Contains(termo, StringComparison.OrdinalIgnoreCase)
+                            || (c.Telefone ?? "").Contains(termo)
+                            || (c.CPF ?? "").Contains(termo)
+                            // Telefone e CPF podem estar gravados com ou sem mascara.
+                            || (digitos.Length >= 3
+                                && (new string((c.Telefone ?? "").Where(char.IsDigit).ToArray()).Contains(digitos)
+                                    || new string((c.CPF ?? "").Where(char.IsDigit).ToArray()).Contains(digitos))))
+                .Where(c => idProfissional == 0 || c.IdProfissionalPreferido == idProfissional)
+                .Where(c => situacao == "" || c.Ativo == (situacao == "ATIVO"))
+                .ToList();
+        }
+    }
+
+    /// <summary>Só aparecem profissionais que são o preferido de alguém.</summary>
+    private List<OpcaoId> OpcoesProfissional =>
+        new List<OpcaoId> { new(0, "Todos") }
+            .Concat(listaCliente
+                .Where(c => c.IdProfissionalPreferido.HasValue)
+                .GroupBy(c => (Id: c.IdProfissionalPreferido!.Value, Nome: c.NomeProfissionalPreferido ?? "Sem nome"))
+                .OrderBy(g => g.Key.Nome)
+                .Select(g => new OpcaoId(g.Key.Id, g.Key.Nome, null, g.Count().ToString())))
+            .ToList();
+
+    private static readonly List<Opcao> OpcoesSituacao = new()
+    {
+        new("", "Todos"),
+        new("ATIVO", "Ativos", "var(--ok)"),
+        new("INATIVO", "Inativos", "var(--texto-fraco)")
+    };
+
+    private void Limpar()
+    {
+        busca = "";
+        idProfissional = 0;
+        situacao = "";
+    }
+
+    protected override void OnInitialized()
+    {
+        CarregarClientes();
+    }
+
+    private void CarregarClientes()
+    {
+        try
+        {
+            listaCliente = clienteDAO.ListarComHistorico();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Erro ao carregar clientes: " + ex.Message);
+        }
+    }
+
+    private static string Valor(string? texto) =>
+        string.IsNullOrWhiteSpace(texto) ? "—" : texto;
+
+    /// <summary>A edicao e uma pagina propria, com o mesmo formulario do cadastro.</summary>
+    private void Editar(Cliente c) => Navigation.NavigateTo($"/cliente/{c.IdCliente}");
+
+    private void Fechar() => visualizando = null;
+
+}

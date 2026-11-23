@@ -1,0 +1,284 @@
+@using Barbearia.Configs
+@using Barbearia.Models
+@inject EsperaDAO esperaDAO
+@inject ClienteDAO clienteDAO
+@inject ServicoDAO servicoDAO
+@inject FuncionarioDAO funcionarioDAO
+@inject Autorizacao permissao
+
+@* Botao da tela de Agendamentos e a janela da lista de espera. O numero
+   no botao e de quem ja tem vaga: e o que pede acao. *@
+
+<button type="button" class="btn btn-outline-secondary btn-espera" @onclick="Abrir">
+    Lista de espera
+    @if (ComVaga > 0)
+    {
+        <span class="contador-espera vaga" title="Clientes com vaga disponível">@ComVaga</span>
+    }
+    else if (lista.Count > 0)
+    {
+        <span class="contador-espera">@lista.Count</span>
+    }
+</button>
+
+<Janela Visivel="aberta" Titulo="Lista de espera" Largura="880" Erro="@erro" OnFechar="() => aberta = false">
+    <ChildContent>
+        @if (podeCriar)
+        {
+            @if (!adicionando)
+            {
+                <button type="button" class="btn btn-outline-primary mb-3" @onclick="NovaEspera">+ Adicionar cliente</button>
+            }
+            else
+            {
+                <section class="form-espera">
+                    <div class="grade-espera">
+                        <div class="campo-espera largo">
+                            <label>Cliente</label>
+                            <Seletor TItem="OpcaoId" TValor="int" Itens="OpcoesCliente" ComBusca="true"
+                                     @bind-Valor="nova.IdCliente" TextoDe="o => o.Rotulo" ValorDe="o => o.Id" />
+                        </div>
+                        <div class="campo-espera">
+                            <label for="espera-dia">Dia</label>
+                            <input id="espera-dia" type="date" class="form-control" min="@DateTime.Today.ToString("yyyy-MM-dd")" @bind="nova.Data" />
+                        </div>
+                        <div class="campo-espera">
+                            <label>Período</label>
+                            <Seletor TItem="Opcao" TValor="string" Itens="OpcoesPeriodo"
+                                     @bind-Valor="nova.Periodo" TextoDe="o => o.Rotulo" ValorDe="o => o.Valor" />
+                        </div>
+                        <div class="campo-espera">
+                            <label>Serviço</label>
+                            <Seletor TItem="OpcaoId" TValor="int" Itens="OpcoesServico"
+                                     Valor="nova.IdServico ?? 0" ValorChanged="v => nova.IdServico = v > 0 ? v : null"
+                                     TextoDe="o => o.Rotulo" ValorDe="o => o.Id" />
+                        </div>
+                        <div class="campo-espera">
+                            <label>Profissional</label>
+                            <Seletor TItem="OpcaoId" TValor="int" Itens="OpcoesProfissional" ComAvatar="true"
+                                     Valor="nova.IdFuncionario ?? 0" ValorChanged="v => nova.IdFuncionario = v > 0 ? v : null"
+                                     TextoDe="o => o.Rotulo" ValorDe="o => o.Id" />
+                        </div>
+                        <div class="campo-espera largo">
+                            <label for="espera-obs">Observação</label>
+                            <input id="espera-obs" class="form-control" maxlength="300" placeholder="Opcional" @bind="nova.Observacao" />
+                        </div>
+                    </div>
+                    <div class="form-espera-acoes">
+                        <button type="button" class="btn btn-outline-secondary" @onclick="() => adicionando = false">Cancelar</button>
+                        <button type="button" class="btn btn-primary" disabled="@(nova.IdCliente <= 0)" @onclick="Salvar">Pôr na lista</button>
+                    </div>
+                </section>
+            }
+        }
+
+        @if (lista.Count == 0)
+        {
+            <p class="vazio-espera">Ninguém esperando. Quando um cliente pedir um horário que não tem, ponha ele aqui:
+                a lista avisa assim que abrir vaga no dia e período que ele quer.</p>
+        }
+
+        @foreach (var dia in lista.GroupBy(e => e.Data.Date))
+        {
+            <h3 class="dia-espera">@RotuloDoDia(dia.Key)</h3>
+            <ul class="itens-espera">
+                @foreach (var e in dia)
+                {
+                    <li class="@(e.Vaga.HasValue ? "tem-vaga" : "")">
+                        <div class="quem">
+                            <strong>@e.NomeCliente</strong>
+                            <span class="suave">@(OuPadrao(e.TelefoneCliente, "sem telefone"))</span>
+                            <span class="pedido">
+                                @(OuPadrao(e.NomeServico, "Qualquer serviço")) · @(OuPadrao(e.NomeFuncionario, "qualquer profissional"))
+                                · @PeriodoEspera.Rotulo(e.Periodo)
+                            </span>
+                            @if (!string.IsNullOrWhiteSpace(e.Observacao))
+                            {
+                                <span class="suave">“@e.Observacao”</span>
+                            }
+                        </div>
+                        <div class="situacao">
+                            @if (e.Vaga.HasValue)
+                            {
+                                <span class="status pago"><i></i>Vaga às @e.Vaga.Value.ToString("HH:mm")</span>
+                                <span class="suave">com @CorProfissional.PrimeiroNome(e.VagaNomeFuncionario)</span>
+                            }
+                            else
+                            {
+                                <span class="status pendente"><i></i>Sem vaga ainda</span>
+                            }
+                            @if (e.Avisado)
+                            {
+                                <span class="suave">avisado @e.AvisadoEm?.ToString("dd/MM HH:mm")</span>
+                            }
+                        </div>
+                        <div class="acoes">
+                            @if (e.Vaga.HasValue)
+                            {
+                                <BotaoWhatsApp Telefone="@e.TelefoneCliente" Mensagem="@MensagemVaga(e)" Titulo="Avisar a vaga no WhatsApp" />
+                            }
+                            @if (podeCriar)
+                            {
+                                <a class="btn-acao com-texto" href="@UrlAgendar(e)">Agendar</a>
+                            }
+                            @if (podeEditar)
+                            {
+                                @if (!e.Avisado)
+                                {
+                                    <button type="button" class="btn-acao com-texto" title="Já avisei o cliente" @onclick="() => Avisado(e)">Avisado</button>
+                                }
+                                <button type="button" class="btn-acao perigo com-texto" title="Tirar da lista" @onclick="() => Desistiu(e)">Desistiu</button>
+                            }
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+    </ChildContent>
+    <Rodape>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => aberta = false">Fechar</button>
+    </Rodape>
+</Janela>
+
+@code {
+    private List<EsperaAgendamento> lista = new();
+    private List<OpcaoId> OpcoesCliente = new();
+    private List<OpcaoId> OpcoesServico = new();
+    private List<OpcaoId> OpcoesProfissional = new();
+
+    private static readonly List<Opcao> OpcoesPeriodo =
+        PeriodoEspera.Todos.Select(p => new Opcao(p.Valor, p.Rotulo)).ToList();
+
+    private bool aberta;
+    private bool adicionando;
+    private bool podeCriar;
+    private bool podeEditar;
+    private EsperaAgendamento nova = new();
+    private string? erro;
+
+    private int ComVaga => lista.Count(e => e.Vaga.HasValue);
+
+    private static string OuPadrao(string? texto, string padrao) =>
+        string.IsNullOrWhiteSpace(texto) ? padrao : texto;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await permissao.CarregarAsync();
+        podeCriar = permissao.Pode("agendamentos", Acao.Criar);
+        podeEditar = permissao.Pode("agendamentos", Acao.Editar);
+        Carregar();
+    }
+
+    private void Carregar()
+    {
+        try
+        {
+            erro = null;
+            lista = esperaDAO.ListarAtivas();
+            esperaDAO.ProcurarVagas(lista, DateTime.Now);
+        }
+        catch (Exception ex)
+        {
+            erro = "Erro ao carregar a lista de espera: " + ex.Message;
+        }
+    }
+
+    private void Abrir()
+    {
+        Carregar();
+        aberta = true;
+    }
+
+    /// <summary>Os cadastros so sao lidos quando alguem vai adicionar.</summary>
+    private void NovaEspera()
+    {
+        try
+        {
+            if (OpcoesCliente.Count == 0)
+            {
+                OpcoesCliente = clienteDAO.ListarTodos()
+                    .Where(c => c.Ativo)
+                    .OrderBy(c => c.NomeCliente)
+                    .Select(c => new OpcaoId(c.IdCliente, c.Identificacao))
+                    .ToList();
+                OpcoesServico = new List<OpcaoId> { new(0, "Qualquer serviço") }
+                    .Concat(servicoDAO.ListarTodos().Where(s => s.Ativo).OrderBy(s => s.NomeServico)
+                        .Select(s => new OpcaoId(s.IdServico, s.NomeServico ?? "Sem nome")))
+                    .ToList();
+                OpcoesProfissional = new List<OpcaoId> { new(0, "Qualquer profissional") }
+                    .Concat(funcionarioDAO.ListarTodos().Where(f => f.Ativo)
+                        .Select(f => new OpcaoId(f.IdFuncionario, f.NomeFuncionario ?? "Sem nome")))
+                    .ToList();
+            }
+
+            nova = new EsperaAgendamento();
+            adicionando = true;
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+    }
+
+    private void Salvar()
+    {
+        try
+        {
+            esperaDAO.Inserir(nova);
+            adicionando = false;
+            Carregar();
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+    }
+
+    private void Avisado(EsperaAgendamento e) => Executar(() => esperaDAO.MarcarAvisado(e.IdEspera));
+
+    private void Desistiu(EsperaAgendamento e) => Executar(() => esperaDAO.Desistir(e.IdEspera));
+
+    private void Executar(Action acao)
+    {
+        try
+        {
+            acao();
+            Carregar();
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+    }
+
+    /// <summary>Abre o agendamento com tudo preenchido; ao salvar, o cliente sai da lista.</summary>
+    private static string UrlAgendar(EsperaAgendamento e)
+    {
+        var url = $"/agendamento/novo?espera={e.IdEspera}&cliente={e.IdCliente}&data={e.Data:yyyy-MM-dd}";
+        if (e.IdServico is > 0) url += $"&servico={e.IdServico}";
+        var profissional = e.VagaIdFuncionario ?? e.IdFuncionario;
+        if (profissional is > 0) url += $"&profissional={profissional}";
+        if (e.Vaga.HasValue) url += $"&hora={e.Vaga.Value:HH\\:mm}";
+        return url;
+    }
+
+    private static string MensagemVaga(EsperaAgendamento e)
+    {
+        var dia = e.Data.Date == DateTime.Today ? "hoje"
+            : e.Data.Date == DateTime.Today.AddDays(1) ? "amanhã"
+            : e.Data.ToString("dd/MM");
+        var com = string.IsNullOrWhiteSpace(e.VagaNomeFuncionario)
+            ? "" : $" com {CorProfissional.PrimeiroNome(e.VagaNomeFuncionario)}";
+        return $"Olá, {CorProfissional.PrimeiroNome(e.NomeCliente)}! Abriu um horário {dia} às "
+            + $"{e.Vaga:HH:mm}{com}. Quer que eu reserve para você?";
+    }
+
+    private static string RotuloDoDia(DateTime dia)
+    {
+        var cultura = new System.Globalization.CultureInfo("pt-BR");
+        var corpo = $"{cultura.DateTimeFormat.GetDayName(dia.DayOfWeek)}, {dia:dd/MM}";
+        if (dia == DateTime.Today) return "Hoje · " + corpo;
+        if (dia == DateTime.Today.AddDays(1)) return "Amanhã · " + corpo;
+        return corpo;
+    }
+}

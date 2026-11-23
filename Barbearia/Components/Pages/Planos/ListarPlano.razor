@@ -1,0 +1,209 @@
+﻿@page "/plano"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = Politicas.Planos)]
+
+@using Barbearia.Models
+@using Barbearia.Configs
+@inject PlanoDAO planoDAO
+@inject NavigationManager Navigation
+
+
+<AbasGrupo Abas="AbasGrupo.Assinaturas" />
+
+<h1 class="titulo-listagem">Gestão de Planos</h1>
+
+<div class="barra-acoes barra-listagem">
+    <BotaoExportar Href="/relatorio/planos" />
+    <NavLink href="/plano/novo" class="btn-novo btn-cadastrar">Cadastrar plano</NavLink>
+</div>
+
+@* ---------- filtros ---------- *@
+<section class="filtros">
+    <div class="campo campo-largo">
+        <label>Nome</label>
+        <input class="form-control" placeholder="Buscar plano" @bind="busca" @bind:event="oninput" />
+    </div>
+    <div class="campo">
+        <label>Situação</label>
+        <Seletor TItem="Opcao" TValor="string" Itens="OpcoesSituacao"
+                 @bind-Valor="situacao" TextoDe="o => o.Rotulo" ValorDe="o => o.Valor"
+                 PontoDe="o => o.Cor" />
+    </div>
+    <div class="campo-acoes">
+        <button type="button" class="btn btn-outline-secondary" @onclick="Limpar">Limpar</button>
+    </div>
+</section>
+
+<div class="tabela fixa">
+    <table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Nome</th>
+            <th class="al-dir">Valor</th>
+            <th class="opcional">Periodicidade</th>
+            <th class="opcional">Serviços incluídos</th>
+            <th class="al-dir opcional">Assinantes ativos</th>
+            <th>Situação</th>
+            <th class="col-acoes">Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (Filtrados.Any())
+        {
+            foreach (var plano in Filtrados)
+            {
+                <tr>
+                    <td>@plano.NomePlano</td>
+                    <td class="al-dir">@((plano.Valor ?? 0).ToString("C"))</td>
+                    <td class="opcional">@Periodicidade.Rotulo(plano.Periodicidade)</td>
+                    <td class="opcional">
+                        @if (plano.TotalServicos > 0)
+                        {
+                            <span>@plano.TotalServicos serviço(s)</span>
+                        }
+                        else
+                        {
+                            <span class="text-muted">nenhum</span>
+                        }
+                    </td>
+                    <td class="al-dir opcional">@plano.AssinantesAtivos</td>
+                    <td>
+                        <span class="status @(plano.Ativo ? "pago" : "cancelada")"><i></i>@(plano.Ativo ? "Ativo" : "Inativo")</span>
+                    </td>
+                    <td class="col-acoes">
+                        <AcoesLinha OnVisualizar="() => Visualizar(plano)"
+                                    OnEditar="() => Editar(plano)"
+                                    OnExcluir="() => excluindo = plano" />
+                    </td>
+                </tr>
+            }
+        }
+        else
+        {
+            <tr>
+                <td colspan="7" class="text-center text-muted">Nenhum plano encontrado.</td>
+            </tr>
+        }
+    </tbody>
+    </table>
+</div>
+
+<ConfirmarModal Visivel="@(excluindo != null)" Titulo="Excluir plano" Erro="@erroExclusao"
+                OnConfirmar="ConfirmarExclusao" OnCancelar="CancelarExclusao">
+    Tem certeza que deseja excluir <strong>@excluindo?.NomePlano</strong>?<br /><span class="text-muted">Os componentes do plano serão excluídos junto.</span><br />
+    <span class="text-muted">Esta ação não pode ser desfeita.</span>
+</ConfirmarModal>
+
+<Janela Visivel="@(visualizando != null)" Titulo="@(visualizando?.NomePlano ?? "Plano")"
+        OnFechar="Fechar">
+    <ChildContent>
+        @if (visualizando != null)
+        {
+            <dl class="ficha">
+                <div><dt>Valor</dt><dd>@((visualizando.Valor ?? 0).ToString("C"))</dd></div>
+                <div><dt>Periodicidade</dt><dd>@Periodicidade.Rotulo(visualizando.Periodicidade)</dd></div>
+                <div><dt>Comissão do assinante</dt><dd>@(visualizando.RegraComissaoAssinante == RegraComissaoAssinante.SemComissao ? "Sem comissão" : "Normal")</dd></div>
+                <div><dt>Itens</dt><dd>@visualizando.TotalItens</dd></div>
+                <div class="largo">
+                    <dt>Descrição</dt>
+                    <dd>@(string.IsNullOrWhiteSpace(visualizando.Descricao) ? "—" : visualizando.Descricao)</dd>
+                </div>
+                <div class="largo">
+                    <dt>O que inclui</dt>
+                    <dd>
+                        @if (itensVisualizados.Count == 0)
+                        {
+                            <span class="text-muted">Nenhum item.</span>
+                        }
+                        else
+                        {
+                            @foreach (var item in itensVisualizados)
+                            {
+                                <div>@(item.Ilimitado ? "Ilimitado:" : $"{item.Quantidade}×") @item.Descricao <span class="text-muted">(@item.RotuloTipo)</span></div>
+                            }
+                        }
+                    </dd>
+                </div>
+            </dl>
+        }
+    </ChildContent>
+    <Rodape>
+        <button type="button" class="btn btn-outline-secondary" @onclick="Fechar">Fechar</button>
+        <button type="button" class="btn btn-primary" @onclick="() => Editar(visualizando!)">Editar</button>
+    </Rodape>
+</Janela>
+
+@code {
+    private Plano? excluindo;
+    private string? erroExclusao;
+
+    private void ConfirmarExclusao()
+    {
+        if (excluindo == null) return;
+
+        try
+        {
+            planoDAO.Excluir(excluindo.IdPlano);
+            excluindo = null;
+            erroExclusao = null;
+            listaPlano = planoDAO.ListarTodos();
+        }
+        catch (Exception ex)
+        {
+            erroExclusao = ex.Message;
+        }
+    }
+
+    private void CancelarExclusao()
+    {
+        excluindo = null;
+        erroExclusao = null;
+    }
+
+    private List<Plano> listaPlano = new();
+
+    private Plano? visualizando;
+    private List<PlanoItem> itensVisualizados = new();
+
+    private string busca = "";
+    private string situacao = "";
+
+    private List<Plano> Filtrados =>
+        listaPlano
+            .Where(p => string.IsNullOrWhiteSpace(busca)
+                        || (p.NomePlano ?? "").Contains(busca.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Where(p => situacao == "" || p.Ativo == (situacao == "ATIVO"))
+            .ToList();
+
+    private static readonly List<Opcao> OpcoesSituacao = new()
+    {
+        new("", "Todos"),
+        new("ATIVO", "Ativos", "var(--ok)"),
+        new("INATIVO", "Inativos", "var(--texto-fraco)")
+    };
+
+    private void Limpar()
+    {
+        busca = "";
+        situacao = "";
+    }
+
+    protected override void OnInitialized()
+    {
+        listaPlano = planoDAO.ListarTodos();
+    }
+
+    private void Visualizar(Plano p)
+    {
+        visualizando = p;
+
+        try { itensVisualizados = planoDAO.ListarItens(p.IdPlano); }
+        catch { itensVisualizados = new(); }
+    }
+
+    /// <summary>A edicao e uma pagina propria, com o mesmo formulario do cadastro.</summary>
+    private void Editar(Plano p) => Navigation.NavigateTo($"/plano/{p.IdPlano}");
+
+    private void Fechar() => visualizando = null;
+
+}

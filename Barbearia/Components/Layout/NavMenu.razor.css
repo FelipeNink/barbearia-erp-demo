@@ -1,0 +1,590 @@
+/* ===========================================================
+   Lateral
+   Fundo carvao chapado. O degrade laranja anterior competia
+   com o conteudo e nao sobrava contraste para o item ativo.
+   =========================================================== */
+.sidebar-header {
+    padding: 22px 16px 0;
+}
+.area-nova-venda {
+    padding: 22px 16px 0;
+}
+/* Acao principal: fica fora do .nav-scrollable para nao sumir
+   quando a lista de itens rolar. */
+/* ::deep porque o <a> vem do NavLink, componente filho: o atributo
+   de escopo desta pagina nao chega nele. */
+.area-nova-venda ::deep .botao-nova-venda {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    height: 46px;
+    padding: 0 12px;
+    background: var(--marca);
+    color: var(--sobre-marca);
+    border-radius: var(--raio);
+    font-size: 15px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: background-color 0.15s;
+}
+.area-nova-venda ::deep .botao-nova-venda:hover {
+    background: var(--marca-escura);
+    color: var(--sobre-marca);
+}
+.area-nova-venda ::deep .botao-nova-venda span {
+    flex: 1;
+}
+.area-nova-venda ::deep .botao-nova-venda svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+.area-nova-venda ::deep .botao-nova-venda kbd {
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(20, 23, 28, 0.16);
+    font-family: var(--fonte);
+    font-size: 12px;
+    color: inherit;
+}
+/* Na propria tela de nova venda: anel em volta, porque o fundo
+   laranja ja esta ocupado e nao da para escurecer mais. */
+.area-nova-venda ::deep .botao-nova-venda.active {
+    box-shadow: 0 0 0 2px var(--lateral-fundo), 0 0 0 4px var(--marca);
+}
+.area-nova-venda ::deep .botao-nova-venda:focus-visible {
+    outline: 2px solid var(--sobre-carvao);
+    outline-offset: 2px;
+}
+/* Novo agendamento: mesma forma do botao de venda, em branco. A lateral
+   e carvao nos dois temas, entao o branco fixo funciona em ambos. */
+.area-nova-venda ::deep .botao-novo-agendamento {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    width: 100%;
+    height: 46px;
+    margin-top: 10px;
+    padding: 0 10px;
+    background: var(--sobre-carvao);
+    color: var(--carvao);
+    border-radius: var(--raio);
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: background-color 0.15s;
+}
+.area-nova-venda ::deep .botao-novo-agendamento:hover {
+    background: var(--sobre-carvao-2);
+    color: var(--carvao);
+}
+.area-nova-venda ::deep .botao-novo-agendamento span {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.area-nova-venda ::deep .botao-novo-agendamento svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+.area-nova-venda ::deep .botao-novo-agendamento.active {
+    box-shadow: 0 0 0 2px var(--lateral-fundo), 0 0 0 4px var(--sobre-carvao);
+}
+.area-nova-venda ::deep .botao-novo-agendamento:focus-visible {
+    outline: 2px solid var(--marca);
+    outline-offset: 2px;
+}
+/* ---------- grupos e itens ---------- */
+.nav-scrollable {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-color: rgba(var(--veu-carvao), 0.16) transparent;
+    padding: 22px 16px;
+}
+.grupo + .grupo {
+    margin-top: 22px;
+}
+.grupo-rotulo {
+    display: block;
+    padding: 0 10px 6px;
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--lateral-fraco);
+}
+/* ---------- grupo recolhivel ----------
+   O rotulo virou botao: setinha a direita, contagem de itens quando
+   fechado e um ponto laranja se a pagina aberta estiver ali dentro. */
+
+button.grupo-rotulo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 26px;
+    margin: 0;
+    background: none;
+    border: none;
+    border-radius: 7px;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+}
+
+button.grupo-rotulo > span:first-child {
+    flex: 1;
+}
+
+button.grupo-rotulo:hover {
+    color: var(--lateral-texto);
+    background: var(--lateral-ativo-fundo);
+}
+
+button.grupo-rotulo:focus-visible {
+    outline: 2px solid var(--marca);
+    outline-offset: 1px;
+}
+
+.grupo.aberto button.grupo-rotulo {
+    color: var(--lateral-texto);
+}
+
+.grupo-rotulo .seta {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transform: rotate(-90deg);
+    transition: transform 0.2s ease;
+}
+
+.grupo.aberto .grupo-rotulo .seta {
+    transform: rotate(0deg);
+}
+
+.ponto-atual {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--marca);
+    box-shadow: 0 0 0 3px rgba(240, 101, 26, 0.18);
+}
+
+/* Altura animada pelo grid: 0fr fechado, 1fr aberto. */
+.grupo-itens {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.22s ease;
+}
+
+.grupo.aberto .grupo-itens {
+    grid-template-rows: 1fr;
+}
+
+.grupo-conteudo {
+    min-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+}
+
+.grupo.aberto .grupo-conteudo {
+    opacity: 1;
+}
+
+/* Fechados ficam juntos, como uma lista de secoes; o respiro maior
+   so aparece depois de um grupo aberto. */
+.grupo:not(.aberto) + .grupo {
+    margin-top: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .grupo-itens,
+    .grupo-conteudo,
+    .grupo-rotulo .seta {
+        transition: none;
+    }
+}
+
+.nav-item {
+    padding: 0;
+}
+.nav-item ::deep .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 40px;
+    padding: 0 10px;
+    border-radius: 7px;
+    font-size: 14.5px;
+    font-weight: 500;
+    color: var(--lateral-texto);
+    text-decoration: none;
+    transition: background-color 0.15s, color 0.15s;
+}
+.nav-item ::deep .nav-link .icone {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    color: var(--lateral-fraco);
+    transition: color 0.15s;
+}
+.nav-item ::deep .nav-link:hover {
+    background: rgba(var(--veu-carvao), 0.05);
+    color: var(--sobre-carvao);
+}
+.nav-item ::deep .nav-link:hover .icone {
+    color: var(--sobre-carvao);
+}
+/* Ativo: o icone acompanha o texto em laranja. A barrinha branca
+   que existia antes virou ruido depois que o fundo ficou escuro. */
+.nav-item ::deep .nav-link.active {
+    background: var(--lateral-ativo-fundo);
+    color: var(--lateral-ativo);
+    font-weight: 600;
+}
+.nav-item ::deep .nav-link.active .icone {
+    color: var(--lateral-ativo);
+}
+.nav-item ::deep .nav-link:focus-visible {
+    outline: 2px solid var(--marca);
+    outline-offset: 2px;
+}
+/* ---------- rodape ---------- */
+/* Duas faixas: o nome em cima, com a largura toda, e as acoes de conta
+   embaixo.
+
+   Numa linha so, que era como estava, os tres botoes de 40px comiam a
+   lateral inteira e sobravam dez pixels para o nome -- "AdminBarber"
+   aparecia como "A". A grade resolve sem encurtar botao nem nome. */
+.rodape-lateral {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+        "usuario usuario"
+        "acoes   acoes";
+    align-items: center;
+    gap: 6px 10px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--lateral-linha);
+}
+
+/* Avatar e nome sao um link so, para a propria conta. */
+.rodape-lateral .usuario-conta {
+    grid-area: usuario;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    margin: -4px -6px;
+    padding: 4px 6px;
+    border-radius: 7px;
+    text-decoration: none;
+    transition: background-color 0.15s;
+}
+
+.rodape-lateral .usuario-conta:hover {
+    background: rgba(var(--veu-carvao), 0.07);
+}
+
+.rodape-lateral .usuario-conta:focus-visible {
+    outline: 2px solid var(--marca);
+    outline-offset: 2px;
+}
+
+/* Os botoes ocupam a faixa de baixo, divididos por igual: alvos
+   largos, que no celular se tocam sem erro. Sao dois ou tres, conforme
+   a pessoa ve ou nao a engrenagem de configuracoes. */
+.rodape-lateral .acoes-conta {
+    grid-area: acoes;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 4px;
+    margin-top: 2px;
+}
+
+.rodape-lateral .acoes-conta .botao-conta {
+    width: 100%;
+}
+.avatar-usuario {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: rgba(var(--veu-carvao), 0.12);
+    font-family: var(--fonte-titulo);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--sobre-carvao);
+}
+.usuario-dados {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+.usuario-nome {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--sobre-carvao);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.usuario-papel {
+    font-size: 11.5px;
+    color: var(--lateral-fraco);
+}
+.botao-conta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: 7px;
+    color: var(--lateral-fraco);
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
+}
+.botao-conta svg {
+    width: 18px;
+    height: 18px;
+}
+.botao-conta:hover {
+    background: rgba(var(--veu-carvao), 0.07);
+    color: var(--sobre-carvao);
+}
+/* Engrenagem acesa quando a pagina aberta e uma das abas de configuracoes. */
+.botao-conta.active {
+    color: var(--marca);
+}
+.botao-conta:focus-visible {
+    outline: 2px solid var(--marca);
+    outline-offset: 2px;
+}
+/* ---------- mobile ---------- */
+.navbar-toggler {
+    appearance: none;
+    cursor: pointer;
+    position: absolute;
+    top: 18px;
+    right: 16px;
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 7px;
+    background: rgba(var(--veu-carvao), 0.1);
+}
+
+/* As tres barrinhas vem por mascara, e nao por um stroke dentro do data
+   URI: variavel CSS nao atravessa url(), e o traco precisa acompanhar a
+   cor secundaria como o resto da lateral. A mascara fica no ::before
+   para o veu do botao, que e o fundo do proprio elemento, nao ser
+   recortado junto. O 0,85 de opacidade no traco sobrevive na mascara
+   e mantem o traco do mesmo jeito de antes, so que agora na cor certa. */
+.navbar-toggler::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-color: var(--sobre-carvao);
+    -webkit-mask: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30' fill='none' stroke='rgba%28255,255,255,0.85%29' stroke-width='2' stroke-linecap='round'%3e%3cpath d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e")
+        center / 20px no-repeat;
+    mask: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30' fill='none' stroke='rgba%28255,255,255,0.85%29' stroke-width='2' stroke-linecap='round'%3e%3cpath d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e")
+        center / 20px no-repeat;
+}
+@media (min-width: 641px) {
+    .navbar-toggler {
+        display: none;
+    }
+}
+@media (max-width: 640px) {
+    .nav-scrollable,
+    .rodape-lateral,
+    .area-nova-venda {
+        display: none;
+    }
+    .navbar-toggler:checked ~ .nav-scrollable,
+    .navbar-toggler:checked ~ .rodape-lateral,
+    .navbar-toggler:checked ~ .area-nova-venda {
+        display: block;
+    }
+    .navbar-toggler:checked ~ .rodape-lateral {
+        display: flex;
+    }
+}
+
+/* Haste clara sobre o carvao da lateral. */
+.nav-scrollable::-webkit-scrollbar-thumb {
+    background: rgba(var(--veu-carvao), 0.16);
+}
+.nav-scrollable::-webkit-scrollbar-thumb:hover {
+    background: rgba(var(--veu-carvao), 0.28);
+}
+.area-nova-venda ::deep .botao-novo-agendamento kbd {
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: rgba(20, 23, 28, 0.08);
+    font-family: var(--fonte);
+    font-size: 11px;
+    color: inherit;
+}
+
+/* ===========================================================
+   Lateral sem rolagem
+   Com 13 itens em tres grupos, o menu nao cabia e aparecia
+   barra de rolagem. Aqui as medidas sao apertadas ate caber:
+   e preferivel linha mais baixa do que menu que rola.
+   =========================================================== */
+
+.sidebar-header {
+    padding: 14px 16px 0;
+}
+
+.area-nova-venda {
+    padding: 14px 16px 0;
+}
+
+.area-nova-venda ::deep .botao-nova-venda,
+.area-nova-venda ::deep .botao-novo-agendamento {
+    height: 40px;
+    font-size: 14px;
+}
+
+.area-nova-venda ::deep .botao-novo-agendamento {
+    margin-top: 7px;
+}
+
+.nav-scrollable {
+    padding: 10px 16px;
+    /* Continua auto como rede de seguranca: numa janela muito baixa
+       e melhor rolar do que cortar item. */
+    overflow-y: auto;
+}
+
+.grupo + .grupo {
+    margin-top: 10px;
+}
+
+.grupo-rotulo {
+    padding: 0 10px 3px;
+    font-size: 10px;
+}
+
+.nav-item ::deep .nav-link {
+    height: 31px;
+    font-size: 13.5px;
+    gap: 10px;
+}
+
+.nav-item ::deep .nav-link .icone {
+    width: 16px;
+    height: 16px;
+}
+
+.rodape-lateral {
+    padding: 10px 16px;
+}
+
+/* O modulo trouxe uma quarta secao e tres itens novos, e a lateral
+   voltou a rolar. Reaperto para caber de novo sem a barra: cada item
+   perde um pixel, os espacos entre grupos perdem dois, e o rodape
+   perde a folga que a segunda faixa de botoes tinha acrescentado.
+   Medido: 649px de conteudo em 617px de espaco, agora 614 em 625. */
+
+.nav-scrollable {
+    padding: 14px 16px 8px;
+}
+
+.grupo + .grupo {
+    margin-top: 14px;
+}
+
+.grupo-rotulo {
+    padding: 0 10px 2px;
+}
+
+.nav-item ::deep .nav-link {
+    height: 30px;
+}
+
+.rodape-lateral {
+    gap: 4px 10px;
+    padding: 8px 16px;
+}
+
+.rodape-lateral .acoes-conta {
+    margin-top: 0;
+}
+
+.rodape-lateral .acoes-conta .botao-conta {
+    height: 34px;
+}
+
+/* Relatorios entrou no Financeiro e a lateral passou de novo do
+   espaco. Em vez de continuar raspando pixel do rodape, o aperto vem
+   dos itens: dezoito deles perdendo 2px cada devolvem 36px, mais do
+   que os 28px que o item novo custa.
+
+   Medido a 900px de altura de janela: 631px de conteudo em 631px antes
+   do item novo, 619px em 631px agora. */
+
+.nav-scrollable {
+    padding: 6px 16px;
+}
+
+.nav-item ::deep .nav-link {
+    height: 28px;
+}
+
+/* Estoque entrou nos Cadastros e a lateral passou 5px. O aperto agora
+   vem dos espacos entre grupos e do respiro dos rotulos, que sobram
+   mais do que a altura dos itens -- que ja esta no limite do
+   confortavel. Medido: 636px de conteudo em 631px, agora 624 em 631. */
+
+.grupo + .grupo {
+    margin-top: 6px;
+}
+
+.grupo-rotulo {
+    padding: 0 10px 1px;
+}
+
+.area-nova-venda ::deep .botao-novo-agendamento {
+    margin-top: 5px;
+}
+
+/* Vigesimo item no menu (Estoque e Assinaturas entraram juntos no
+   merge) e a lateral passou 21px de novo.
+
+   Medido antes de mexer: 20 itens x 28px = 560px, contra 68px de
+   rotulos, 18px de espaco entre grupos e 12px de padding. Os itens sao
+   85% do total, entao e deles que o corte tem de sair -- apertar
+   rotulo e espaco de grupo renderia uns 50px no maximo e as secoes
+   deixariam de se distinguir.
+
+   26px ainda acomoda o icone de 16px e o texto de 13.5px. E o piso:
+   o proximo item nao cabe mais por aperto, e vai pedir grupo
+   recolhivel ou um item saindo do menu. */
+
+.nav-item ::deep .nav-link {
+    height: 26px;
+}

@@ -1,0 +1,139 @@
+.cartao {
+    background: var(--superficie);
+    border: 1px solid var(--borda-suave);
+    border-radius: 10px;
+    padding: 1.25rem;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+}
+
+.cartao h2 {
+    margin: 0 0 1rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--texto);
+}
+
+.campo {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 150px;
+}
+
+.campo-largo {
+    grid-column: span 2;
+}
+
+.campo label,
+.filtros label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--texto-fraco);
+}
+
+/* ---------- filtros ---------- */
+
+.filtros {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    margin-bottom: 0.85rem;
+    background: var(--superficie);
+    border: 1px solid var(--borda-suave);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+}
+
+.campo-acoes {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.atalhos-periodo {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.atalhos-periodo button {
+    padding: 0.3rem 0.75rem;
+    background: none;
+    border: 1px solid var(--borda-3);
+    border-radius: 20px;
+    font-size: 0.8rem;
+    color: var(--texto-2);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.atalhos-periodo button:hover {
+    background: var(--marca);
+    border-color: var(--marca);
+    color: var(--sobre-marca);
+}
+
+/* ---------- resumo ---------- */
+
+.resumo {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    max-width: 900px;
+}
+
+.cartao-resumo {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.85rem 1rem;
+    background: var(--superficie);
+    border: 1px solid var(--borda-suave);
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+}
+
+.cartao-resumo.total {
+    border-left-color: var(--perigo-escuro);
+}
+
+.cartao-resumo .rotulo {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--texto-fraco);
+}
+
+.cartao-resumo .valor {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--texto);
+}
+
+/* ---------- tabela ---------- */
+
+.dir {
+    text-align: right;
+}
+
+.col-acao {
+    text-align: right;
+    width: 1%;
+    white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+    .resumo {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .campo-largo {
+        grid-column: span 1;
+    }
+}

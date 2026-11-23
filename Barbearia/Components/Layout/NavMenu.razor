@@ -1,0 +1,523 @@
+@rendermode InteractiveServer
+@using Barbearia.Configs
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject AuthenticationService auth
+@inject Autorizacao permissao
+@implements IDisposable
+
+<div class="sidebar-header">
+    <Marca Variante="Marca.Tipo.Compacta" />
+</div>
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+
+@* Acao principal do sistema, fixa e fora da area que rola: quem abre o
+   sistema quase sempre vem para lancar uma venda. Os dois botoes so
+   aparecem para quem pode criar venda e agendamento. *@
+@if (permissao.Pode("vendas", Acao.Criar) || permissao.Pode("agendamentos", Acao.Criar))
+{
+    <div class="area-nova-venda">
+        @if (permissao.Pode("vendas", Acao.Criar))
+        {
+            <NavLink class="botao-nova-venda" href="venda/nova">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" />
+                </svg>
+                <span>Nova venda</span>
+                <kbd>F2</kbd>
+            </NavLink>
+        }
+
+        @* Segunda acao mais comum. Fundo branco para nao disputar com a venda. *@
+        @if (permissao.Pode("agendamentos", Acao.Criar))
+        {
+            <NavLink class="botao-novo-agendamento" href="agendamento/novo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM16 2v4M8 2v4M3 10h18M12 13v6M9 16h6" />
+                </svg>
+                <span>Novo agendamento</span>
+                <kbd>F3</kbd>
+            </NavLink>
+        }
+    </div>
+}
+
+
+<div class="nav-scrollable">
+    <nav class="nav flex-column">
+
+        @if (AlgumaDe("painel", "meudia", "vendas", "agendamentos", "caixa"))
+        {
+            <div class="grupo @(Aberto("Operação") ? "aberto" : "")">
+                <button type="button" class="grupo-rotulo" aria-expanded="@Aberto("Operação")"
+                        @onclick='() => Alternar("Operação")'>
+                    <span>Operação</span>
+                    @if (!Aberto("Operação"))
+                    {
+                        @if (GrupoAtual == "Operação")
+                        {
+                            <i class="ponto-atual" title="A página aberta está aqui"></i>
+                        }
+                    }
+                    <svg class="seta" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+                </button>
+                <div class="grupo-itens"><div class="grupo-conteudo">
+
+                @if (Pode("painel"))
+                {
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                            <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" />
+                            </svg>
+                            Painel
+                        </NavLink>
+                    </div>
+                }
+
+                @if (Pode("meudia"))
+                {
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="meu-dia">
+                            <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0" />
+                            </svg>
+                            Meu dia
+                        </NavLink>
+                    </div>
+                }
+
+                @if (Pode("vendas"))
+                {
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="vendas">
+                            <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6" />
+                            </svg>
+                            Vendas
+                        </NavLink>
+                    </div>
+                }
+
+                @if (Pode("agendamentos"))
+                {
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="agendamentos">
+                            <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM16 2v4M8 2v4M3 10h18" />
+                            </svg>
+                            Agendamentos
+                        </NavLink>
+                    </div>
+                }
+
+                @if (Pode("caixa"))
+                {
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="caixa">
+                            <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M3 10h18v10H3zM5 10l2-6h10l2 6M10 15h4" />
+                            </svg>
+                            Caixa
+                        </NavLink>
+                    </div>
+                }
+                </div></div>
+            </div>
+        }
+
+        @if (AlgumaDe("relatorios", "fluxo", "receber", "despesas", "comissoes", "folha", "notas"))
+        {
+            <div class="grupo @(Aberto("Financeiro") ? "aberto" : "")">
+                <button type="button" class="grupo-rotulo" aria-expanded="@Aberto("Financeiro")"
+                        @onclick='() => Alternar("Financeiro")'>
+                    <span>Financeiro</span>
+                    @if (!Aberto("Financeiro"))
+                    {
+                        @if (GrupoAtual == "Financeiro")
+                        {
+                            <i class="ponto-atual" title="A página aberta está aqui"></i>
+                        }
+                    }
+                    <svg class="seta" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+                </button>
+                <div class="grupo-itens"><div class="grupo-conteudo">
+
+                @* Primeiro da secao: depois do painel, e a tela que o dono
+                   mais abre. *@
+                @if (Pode("relatorios"))
+                {
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="relatorios">
+                            <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M3 3v18h18M7 15l3-4 3 3 5-7" />
+                            </svg>
+                            Relatórios
+                        </NavLink>
+                    </div>
+                }
+
+                @if (Pode("fluxo"))
+                {
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="fluxo-caixa">
+                            <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M7 4v16M4 7l3-3 3 3M17 20V4M14 17l3 3 3-3" />
+                            </svg>
+                            Fluxo de caixa
+                        </NavLink>
+                    </div>
+                }
+
+                @if (Pode("receber"))
+                {
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="contas-receber">
+                            <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M12 20V8M7 13l5-5 5 5M5 4h14" />
+                            </svg>
+                            Contas a receber
+                        </NavLink>
+                    </div>
+                }
+
+                @if (Pode("despesas"))
+                {
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="despesas">
+                            <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M12 4v12M7 11l5 5 5-5M5 20h14" />
+                            </svg>
+                            Despesas
+                        </NavLink>
+                    </div>
+                }
+
+                @* Folha e comissoes num item so; as duas viram abas da tela. *@
+                @if (AlgumaDe("folha", "comissoes"))
+                {
+                    <div class="nav-item">
+                        <NavLink class="@($"nav-link {AtivoEm(AbasGrupo.Repasses)}")" href="@PrimeiraAba(AbasGrupo.Repasses)">
+                            <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M2 6h20v12H2zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 12h.01M18 12h.01" />
+                            </svg>
+                            Repasses
+                        </NavLink>
+                    </div>
+                }
+
+                @if (Pode("notas"))
+                {
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="notas-fiscais">
+                            <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h5" />
+                            </svg>
+                            Notas fiscais
+                        </NavLink>
+                    </div>
+                }
+                </div></div>
+            </div>
+        }
+
+        @if (AlgumaDe("clientes", "servicos", "produtos", "estoque", "compras", "planos",
+                      "assinaturas", "funcionarios", "fornecedores"))
+        {
+            <div class="grupo @(Aberto("Cadastros") ? "aberto" : "")">
+                <button type="button" class="grupo-rotulo" aria-expanded="@Aberto("Cadastros")"
+                        @onclick='() => Alternar("Cadastros")'>
+                    <span>Cadastros</span>
+                    @if (!Aberto("Cadastros"))
+                    {
+                        @if (GrupoAtual == "Cadastros")
+                        {
+                            <i class="ponto-atual" title="A página aberta está aqui"></i>
+                        }
+                    }
+                    <svg class="seta" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+                </button>
+                <div class="grupo-itens"><div class="grupo-conteudo">
+
+                @if (Pode("clientes"))
+                {
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="/cliente">
+                            <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
+                            </svg>
+                            Clientes
+                        </NavLink>
+                    </div>
+                }
+
+                @if (Pode("servicos"))
+                {
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="servico">
+                            <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M19 5L5 19M6.5 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM17.5 20a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" />
+                            </svg>
+                            Serviços
+                        </NavLink>
+                    </div>
+                }
+
+                @* Saldo, produtos, compras e fornecedores num item so; as
+                   quatro telas viram abas. *@
+                @if (AlgumaDe("estoque", "produtos", "compras", "fornecedores"))
+                {
+                    <div class="nav-item">
+                        <NavLink class="@($"nav-link {AtivoEm(AbasGrupo.Estoque)}")" href="@PrimeiraAba(AbasGrupo.Estoque)">
+                            <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M3 9h18v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM3 9l2-5h14l2 5M10 13h4" />
+                            </svg>
+                            Estoque
+                        </NavLink>
+                    </div>
+                }
+
+                @* Assinantes e planos num item so; as duas telas viram abas. *@
+                @if (AlgumaDe("assinaturas", "planos"))
+                {
+                    <div class="nav-item">
+                        <NavLink class="@($"nav-link {AtivoEm(AbasGrupo.Assinaturas)}")" href="@PrimeiraAba(AbasGrupo.Assinaturas)">
+                            <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M4 5h16v14H4zM4 10h16M8 15h3" />
+                            </svg>
+                            Assinaturas
+                        </NavLink>
+                    </div>
+                }
+
+                @if (Pode("funcionarios"))
+                {
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="funcionario">
+                            <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M16 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9.5 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM21 20v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" />
+                            </svg>
+                            Funcionários
+                        </NavLink>
+                    </div>
+                }
+                </div></div>
+            </div>
+        }
+
+    </nav>
+</div>
+
+@* Rodape: quem esta usando o sistema, e as acoes de conta. *@
+<div class="rodape-lateral">
+    @* Clicar em quem esta logado abre a propria conta. *@
+    <a class="usuario-conta" href="/conta" title="Minha conta">
+        <span class="avatar-usuario" aria-hidden="true">@Iniciais</span>
+
+        <span class="usuario-dados">
+            <span class="usuario-nome">@NomeUsuario</span>
+            @* Era "Administrador" escrito no HTML, para qualquer um que
+               entrasse. Agora vem do acesso: a funcao da pessoa, se ela tiver
+               uma, e senao o perfil. *@
+            <span class="usuario-papel">@Papel</span>
+        </span>
+    </a>
+
+    <div class="acoes-conta">
+    @* A engrenagem e a configuracao do sistema: equipe, funcoes, horario
+       e logs, em abas. So aparece para quem pode abrir alguma delas. *@
+    @if (AlgumaDe("equipe", "funcoes", "logs", "horario", "agendaonline"))
+    {
+    <a class="botao-conta @AtivoEm(AbasGrupo.Configuracoes)" href="@PrimeiraAba(AbasGrupo.Configuracoes)"
+       aria-label="Configurações" title="Configurações">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+            <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+        </svg>
+    </a>
+    }
+
+    <button type="button" class="botao-conta"
+            aria-label="@(tema == "escuro" ? "Usar tema claro" : "Usar tema escuro")"
+            @onclick='() => TrocarTema(tema == "escuro" ? "claro" : "escuro")'>
+        @if (tema == "escuro")
+        {
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" />
+            </svg>
+        }
+        else
+        {
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+            </svg>
+        }
+    </button>
+
+    <button type="button" class="botao-conta" aria-label="Sair do sistema" @onclick="AbrirConfirmacao">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+        </svg>
+    </button>
+    </div>
+</div>
+
+<ConfirmarModal Visivel="mostrarConfirmacao" Titulo="Sair do sistema" TextoConfirmar="Sair"
+                OnConfirmar="ConfirmarSaida" OnCancelar="CancelarSaida">
+    Tem certeza que deseja sair do sistema?
+</ConfirmarModal>
+
+@code {
+    private bool mostrarConfirmacao = false;
+
+    private string NomeUsuario => auth.GetUsuarioNome() ?? "Usuário";
+
+    /// <summary>Ate duas iniciais do nome, para o avatar do rodape.</summary>
+    private string Iniciais => auth.Iniciais;
+
+    /// <summary>A funcao da pessoa, ou o perfil quando ela nao tem funcao.</summary>
+    private string Papel => auth.GetFuncao() ?? Perfil.Rotulo(auth.GetPerfil());
+
+    /// <summary>
+    /// Carrega quem esta logado e o que ele pode. Precisa acontecer aqui,
+    /// e nao numa propriedade: ler o estado de autenticacao e assincrono,
+    /// e dentro do circuito nao existe HttpContext de onde tirar isso na
+    /// hora.
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        await auth.PrepararAsync();
+        await permissao.CarregarAsync();
+
+        // Ao entrar, todas as secoes abertas; fechar e escolha de quem usa.
+        abertos.UnionWith(Catalogo.Secoes);
+
+        Navigation.LocationChanged += AoNavegar;
+    }
+
+    // ---------- grupos recolhiveis ----------
+
+    /// <summary>Secoes abertas. Vive com o circuito: recarregar a pagina volta ao inicio.</summary>
+    private readonly HashSet<string> abertos = new();
+
+    private bool Aberto(string grupo) => abertos.Contains(grupo);
+
+    private void Alternar(string grupo)
+    {
+        if (!abertos.Remove(grupo)) abertos.Add(grupo);
+    }
+
+    /// <summary>Secao da pagina aberta, pelas rotas do catalogo.</summary>
+    private string? GrupoAtual
+    {
+        get
+        {
+            var caminho = "/" + Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].TrimEnd('/');
+
+            return Catalogo.Telas
+                .FirstOrDefault(t => t.Rotas.Any(r => r == "/"
+                    ? caminho == "/"
+                    : caminho.Equals(r, StringComparison.OrdinalIgnoreCase)
+                      || caminho.StartsWith(r + "/", StringComparison.OrdinalIgnoreCase)))
+                ?.Secao;
+        }
+    }
+
+    /// <summary>Indo para outra secao, ela abre; as que estavam abertas continuam.</summary>
+    private void AoNavegar(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        var grupo = GrupoAtual;
+        if (grupo != null) abertos.Add(grupo);
+
+        // Sempre redesenha: o destaque de Estoque e Repasses depende da pagina aberta.
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= AoNavegar;
+
+    /// <summary>
+    /// O item aparece? Esconder o que a pessoa nao pode abrir evita o
+    /// menu virar uma lista de portas trancadas -- mas quem protege de
+    /// verdade e a guarda da pagina: isto aqui e so cortesia com quem
+    /// esta olhando.
+    /// </summary>
+    private bool Pode(string tela) => permissao.PodeVer(tela);
+
+    /// <summary>A secao so aparece se algum item dela aparecer.</summary>
+    private bool AlgumaDe(params string[] telas) => telas.Any(Pode);
+
+    /// <summary>Item que junta varias telas leva para a primeira aba que a pessoa pode abrir.</summary>
+    private string? PrimeiraAba(AbasGrupo.Aba[] abas) =>
+        abas.FirstOrDefault(a => Pode(a.Tela))?.Href.TrimStart('/');
+
+    /// <summary>
+    /// "active" quando a pagina aberta e uma das telas do grupo. O NavLink
+    /// sozinho so compara com o proprio href, e o item aponta para uma aba so.
+    /// </summary>
+    private string AtivoEm(AbasGrupo.Aba[] abas)
+    {
+        var tela = Catalogo.PorRota(Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0])?.Chave;
+        return abas.Any(a => a.Tela == tela) ? "active" : "";
+    }
+
+    /// <summary>
+    /// Tema em exibicao. Comeca em "claro" so para o render estatico do
+    /// servidor ter algo; o valor real vem do localStorage assim que o
+    /// circuito liga, em OnAfterRenderAsync.
+    /// </summary>
+    private string tema = "claro";
+
+    protected override async Task OnAfterRenderAsync(bool primeiraVez)
+    {
+        if (!primeiraVez) return;
+
+        var salvo = await JS.InvokeAsync<string>("tema.ler");
+        if (salvo != tema)
+        {
+            tema = salvo;
+            StateHasChanged();
+        }
+    }
+
+    private async Task TrocarTema(string novo)
+    {
+        if (novo == tema) return;
+
+        tema = novo;
+        await JS.InvokeVoidAsync("tema.aplicar", novo);
+    }
+
+    private void AbrirConfirmacao() => mostrarConfirmacao = true;
+
+    private void CancelarSaida() => mostrarConfirmacao = false;
+
+    private void ConfirmarSaida()
+    {
+        mostrarConfirmacao = false;
+        // forceLoad garante uma requisicao HTTP real, onde a sessao pode ser limpa.
+        Navigation.NavigateTo("/logout", forceLoad: true);
+    }
+}

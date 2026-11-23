@@ -1,0 +1,1687 @@
+@* Tela da venda, a mesma para registrar e editar (IdVendaEdicao). Na
+   edicao, so venda de caixa aberto e comissao nao paga chega aqui
+   (VendaDAO.SituacaoParaEditar); a listagem resolve os outros casos. *@
+
+@using Barbearia.Models
+@inject ClienteDAO clienteDAO
+@inject PlanoDAO planoDAO
+@inject ServicoDAO servicoDAO
+@inject ProdutoDAO produtoDAO
+@inject FuncionarioDAO funcionarioDAO
+@inject VendaDAO vendaDAO
+@inject AssinaturaDAO assinaturaDAO
+@inject CaixaDAO caixaDAO
+@inject AgendamentoDAO agendamentoDAO
+@inject ContaReceberDAO contaReceberDAO
+@inject Barbearia.Services.AuthenticationService auth
+@inject NavigationManager Navigation
+
+
+<TopoForm Titulo="@(Editando ? $"Editar venda #{IdVendaEdicao}" : "Nova venda")" Voltar="/vendas" RotuloVoltar="Vendas" />
+
+@if (!string.IsNullOrEmpty(erro))
+{
+    <div class="alert alert-danger">@erro</div>
+}
+
+@if (bloqueada)
+{
+    <p><a href="/vendas">Voltar para as vendas</a></p>
+}
+else
+{
+@if (caixaAberto == null && !Editando)
+{
+    <div class="sem-caixa">
+        <div>
+            <strong>Nenhum caixa aberto</strong>
+            <span>A venda precisa de um caixa aberto para o dinheiro ser conferido no fechamento.</span>
+        </div>
+        <div class="abrir-aqui">
+            <InputMoeda placeholder="Saldo inicial" @bind-Valor="valorAberturaCaixa" />
+            <button type="button" class="btn btn-primary" @onclick="AbrirCaixa">Abrir caixa</button>
+        </div>
+    </div>
+}
+
+<div class="venda">
+
+    <div class="coluna-esquerda">
+
+        @* ================= CLIENTE E AGENDAMENTO ================= *@
+        <section class="bloco">
+            <div class="bloco-topo">
+                <h2 class="bloco-titulo">
+                    <svg class="icone-titulo" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" /></svg>
+                    Cliente e agendamento
+                </h2>
+                @if (clienteSelecionado == null && !semCliente)
+                {
+                    <div class="acoes-cliente">
+                        <button type="button" class="chip-acao" @onclick="UsarSemCliente">Venda sem cliente</button>
+                        <button type="button" class="chip-acao destaque"
+                                @onclick="() => modalAberto = CadastroRapido.TipoCadastro.Cliente">+ Novo cliente</button>
+                    </div>
+                }
+            </div>
+
+            @if (clienteSelecionado == null && !semCliente)
+            {
+                <div class="busca-cliente">
+                    <svg class="icone-busca" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
+                    <input class="form-control busca" placeholder="Buscar por nome, telefone, CPF ou escolher um agendamento de hoje…"
+                           @bind="termoBusca" @bind:event="oninput" @bind:after="BuscarClientes"
+                           @onfocus="() => buscaAberta = true" @onblur="() => buscaAberta = false" />
+
+                    @if (buscaAberta || termoBusca.Trim().Length >= 2)
+                    {
+                        <div class="lista-busca">
+                            @if (!Editando && AgendamentosDaBusca.Count > 0)
+                            {
+                                <div class="lista-busca-titulo">
+                                    <span>Agendamentos de hoje</span>
+                                    <span class="destaque">Clique para trazer para a venda</span>
+                                </div>
+                                @foreach (var a in AgendamentosDaBusca)
+                                {
+                                    <button type="button" class="resultado"
+                                            @onmousedown="() => ImportarAgendamento(a)" @onmousedown:preventDefault="true">
+                                        <span>
+                                            <span class="resultado-nome">@(a.NomeCliente ?? "Sem cliente")</span>
+                                            <span class="resultado-info">@(a.NomeServico ?? "—") · @(a.NomeFuncionario ?? "—")</span>
+                                        </span>
+                                        <span class="hora-agendada">@a.DataHora.ToString("HH:mm")</span>
+                                    </button>
+                                }
+                            }
+
+                            @if (resultados.Count > 0)
+                            {
+                                <div class="lista-busca-titulo"><span>Clientes</span></div>
+                                @foreach (var c in resultados)
+                                {
+                                    <button type="button" class="resultado"
+                                            @onmousedown="() => SelecionarCliente(c.IdCliente)" @onmousedown:preventDefault="true">
+                                        <span>
+                                            <span class="resultado-nome">@c.NomeCliente</span>
+                                            <span class="resultado-info">
+                                                @(string.IsNullOrWhiteSpace(c.Telefone) ? "sem telefone" : c.Telefone)
+                                                @if (c.TemPlano)
+                                                {
+                                                    <span class="etiqueta-plano">@c.NomePlano</span>
+                                                }
+                                            </span>
+                                        </span>
+                                        <span class="selecionar">Selecionar</span>
+                                    </button>
+                                }
+                            }
+                            else if (termoBusca.Trim().Length >= 2)
+                            {
+                                <div class="sem-resultado">
+                                    Nenhum cliente com "@termoBusca".
+                                    <button type="button" class="btn btn-primary btn-sm"
+                                            @onmousedown="CadastrarComTermo" @onmousedown:preventDefault="true">
+                                        Cadastrar "@termoBusca"
+                                    </button>
+                                </div>
+                            }
+                            else if (Editando || AgendamentosDaBusca.Count == 0)
+                            {
+                                <div class="lista-busca-vazia">Digite ao menos 2 letras para buscar o cliente.</div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="cliente-escolhido">
+                    <span class="avatar-cliente">@Iniciais(clienteSelecionado?.NomeCliente)</span>
+                    <div class="cliente-dados">
+                        <div class="cliente-linha">
+                            <strong>@(clienteSelecionado?.NomeCliente ?? "Venda sem cliente")</strong>
+                            @if (agendamentoImportado != null)
+                            {
+                                <span class="selo-agendado">Agendado @agendamentoImportado.DataHora.ToString("HH:mm")</span>
+                            }
+                        </div>
+                        <span class="cliente-detalhe">
+                            @if (clienteSelecionado == null)
+                            {
+                                <text>Venda rápida no balcão</text>
+                            }
+                            else
+                            {
+                                @(string.IsNullOrWhiteSpace(clienteSelecionado.Telefone) ? "sem telefone" : clienteSelecionado.Telefone)
+                                @if (AssinaturasComCredito.Count > 0)
+                                {
+                                    <text> · @TotalCreditos crédito(s) de plano</text>
+                                }
+                            }
+                        </span>
+                        @if (saldoFiado > 0)
+                        {
+                            <span class="aviso-fiado">Deve @saldoFiado.ToString("C") em fiado</span>
+                        }
+                    </div>
+                    <button type="button" class="remover" title="Trocar cliente" @onclick="TrocarCliente">×</button>
+                </div>
+
+                @* --- planos do cliente: varios podem conviver --- *@
+                @if (AssinaturasComCredito.Count > 0)
+                {
+                    <div class="planos-ativos">
+                        <div class="planos-cabecalho">
+                            <strong>
+                                @AssinaturasComCredito.Count
+                                @(AssinaturasComCredito.Count == 1 ? "plano ativo" : "planos ativos")
+                            </strong>
+                            <span>@TotalCreditos crédito(s) disponíveis</span>
+                        </div>
+
+                        @foreach (var a in AssinaturasComCredito)
+                        {
+                            <div class="plano-cartao">
+                                <div class="plano-cabecalho">
+                                    <strong>@a.NomePlano</strong>
+                                    <span class="validade">@a.ValidadeTexto</span>
+                                </div>
+
+                                <ul class="lista-creditos">
+                                    @foreach (var saldo in a.Saldos)
+                                    {
+                                        <li class="@(saldo.Restante == 0 ? "esgotado" : "")">
+                                            <div class="credito-info">
+                                                <span class="credito-nome">@saldo.Descricao</span>
+                                                @{
+                                                    var naVenda = JaUsados(saldo);
+                                                }
+                                                <span class="credito-saldo">
+                                                    <strong>@saldo.Restante</strong> de @saldo.QuantidadeTotal restantes
+                                                    @if (naVenda > 0)
+                                                    {
+                                                        <span class="credito-usando">
+                                                            −@naVenda nesta venda → fica @(saldo.Restante - naVenda)
+                                                        </span>
+                                                    }
+                                                </span>
+                                            </div>
+
+                                            @if (saldo.Restante > 0)
+                                            {
+                                                <button type="button" class="btn-baixa"
+                                                        disabled="@(JaUsados(saldo) >= saldo.Restante)"
+                                                        title="Usar 1 @saldo.Descricao nesta venda"
+                                                        @onclick="() => UsarCredito(saldo)">
+                                                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                                                        <path d="M3.5 8a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 0 1H4a.5.5 0 0 1-.5-.5" />
+                                                    </svg>
+                                                    <span class="sr">Usar crédito</span>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <span class="etiqueta-esgotado">esgotado</span>
+                                            }
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @* --- assinaturas sem credito, para renovar --- *@
+                @if (AssinaturasEsgotadas.Count > 0 && !Editando)
+                {
+                    @foreach (var a in AssinaturasEsgotadas)
+                    {
+                        <div class="plano-esgotado">
+                            <div>
+                                <strong>@a.NomePlano</strong>
+                                <span>
+                                    @(a.Vencida
+                                        ? $"venceu em {a.DataFim!.Value:dd/MM/yyyy}"
+                                        : "créditos esgotados")
+                                </span>
+                            </div>
+                            <button type="button" class="btn btn-outline-secondary btn-sm"
+                                    disabled="@PlanoJaNaVenda"
+                                    @onclick="() => RenovarPlano(a.IdPlano)">
+                                Renovar
+                            </button>
+                        </div>
+                    }
+                }
+
+                @* --- venda de plano --- *@
+                @if (planos.Count > 0 && !Editando && clienteSelecionado != null)
+                {
+                    <div class="vender-plano">
+                        <span class="vender-plano-titulo">
+                            @(AssinaturasComCredito.Count > 0 ? "Vender outro plano" : "Vender plano")
+                        </span>
+
+                        <div class="grade-planos">
+                            @foreach (var p in planos.Where(p => p.Ativo))
+                            {
+                                <button type="button" class="cartao-plano"
+                                        disabled="@PlanoJaNaVenda"
+                                        @onclick="() => VenderPlano(p)">
+                                    <span class="plano-nome">@p.NomePlano</span>
+                                    <span class="plano-valor">@(((decimal)(p.Valor ?? 0)).ToString("C"))</span>
+                                    @if (p.TotalItens > 0)
+                                    {
+                                        <span class="plano-creditos">@p.TotalItens crédito(s)</span>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+        </section>
+
+        @* ================= ADICIONAR ITENS ================= *@
+        <section class="bloco">
+            <div class="bloco-topo">
+                <h2 class="bloco-titulo">
+                    Adicionar itens
+                    <span class="bloco-dica">clique para pôr na venda</span>
+                </h2>
+                <div class="filtro">
+                    <svg class="icone-busca" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
+                    <input class="form-control" placeholder="Filtrar serviço ou produto…"
+                           @bind="filtroCatalogo" @bind:event="oninput" />
+                </div>
+            </div>
+
+            <div class="categorias">
+                @foreach (var c in Categorias)
+                {
+                    <button type="button" class="categoria @(categoria == c.Valor ? "ativa" : "")"
+                            @onclick="() => categoria = c.Valor">
+                        @c.Rotulo
+                    </button>
+                }
+            </div>
+
+            @if (ServicosFiltrados.Count > 0 || ProdutosFiltrados.Count > 0)
+            {
+                <div class="pilulas">
+                    @foreach (var s in ServicosFiltrados)
+                    {
+                        <button type="button" class="pilula" @onclick="() => AdicionarServico(s)">
+                            <svg class="icone-pilula" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12" /></svg>
+                            <span>@s.NomeServico</span>
+                            <strong>@PrecoDe(s, idFuncionario).ToString("C")</strong>
+                            @if (QuantidadeNaNota(TipoItem.Servico, s.IdServico) > 0)
+                            {
+                                <span class="item-badge">@QuantidadeNaNota(TipoItem.Servico, s.IdServico)</span>
+                            }
+                        </button>
+                    }
+                    @foreach (var p in ProdutosFiltrados)
+                    {
+                        <button type="button" class="pilula" @onclick="() => AdicionarProduto(p)"
+                                title="@p.Quantidade em estoque">
+                            <svg class="icone-pilula" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10" /></svg>
+                            <span>@p.NomeProduto</span>
+                            <strong>@p.Valor.ToString("C")</strong>
+                            <span class="item-estoque @(p.Quantidade <= 0 ? "zerado" : "")">@p.Quantidade un</span>
+                            @if (QuantidadeNaNota(TipoItem.Produto, p.IdProduto) > 0)
+                            {
+                                <span class="item-badge">@QuantidadeNaNota(TipoItem.Produto, p.IdProduto)</span>
+                            }
+                        </button>
+                    }
+                </div>
+            }
+            else
+            {
+                <p class="vazio-catalogo">
+                    @(servicos.Count + produtos.Count == 0
+                        ? "Nenhum serviço ou produto cadastrado."
+                        : string.IsNullOrWhiteSpace(filtroCatalogo) ? "Nenhum item nesta categoria." : $"Nenhum item com \"{filtroCatalogo}\".")
+                </p>
+            }
+
+            <div class="cadastrar-itens">
+                <button type="button" class="acao-campo" @onclick="() => modalAberto = CadastroRapido.TipoCadastro.Servico">
+                    + Cadastrar serviço
+                </button>
+                <button type="button" class="acao-campo" @onclick="() => modalAberto = CadastroRapido.TipoCadastro.Produto">
+                    + Cadastrar produto
+                </button>
+            </div>
+        </section>
+
+        @* ================= ITENS DA VENDA ================= *@
+        <section class="bloco itens-venda">
+            <div class="itens-topo">
+                <h2>
+                    <svg class="icone-titulo" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2" /></svg>
+                    Itens da venda
+                </h2>
+                <span class="contagem-itens">@itens.Sum(i => i.Quantidade) @(itens.Sum(i => i.Quantidade) == 1 ? "item" : "itens")</span>
+            </div>
+
+            @if (itens.Count == 0)
+            {
+                <div class="itens-vazio">
+                    <strong>A comanda está vazia</strong>
+                    <span>Clique num serviço ou produto acima para começar a venda.</span>
+                </div>
+            }
+            else
+            {
+                <div class="tabela-itens">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Item / serviço</th>
+                                <th>Profissional</th>
+                                <th class="centro">Qtd</th>
+                                <th class="dir">Unitário</th>
+                                <th class="dir">Desconto</th>
+                                <th class="dir">Subtotal</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in itens)
+                            {
+                                <tr>
+                                    <td>
+                                        <span class="item-nome">@item.Descricao</span>
+                                        <span class="item-tipo">
+                                            @item.RotuloTipo
+                                            @if (item.CobertoPlano)
+                                            {
+                                                <span class="selo-plano">plano</span>
+                                            }
+                                        </span>
+                                    </td>
+                                    <td>
+                                        @if (item.TipoItem != TipoItem.Plano)
+                                        {
+                                            <select class="form-select form-select-sm" aria-label="Profissional do item"
+                                                    @onchange="e => TrocarProfissionalDoItem(item, e)">
+                                                <option value="0" selected="@(item.IdFuncionario is not > 0)">Profissional da venda</option>
+                                                @foreach (var f in ProfissionaisDisponiveis)
+                                                {
+                                                    <option value="@f.IdFuncionario" selected="@(item.IdFuncionario == f.IdFuncionario)">@f.NomeFuncionario</option>
+                                                }
+                                            </select>
+                                        }
+                                        else
+                                        {
+                                            <span class="suave">—</span>
+                                        }
+                                    </td>
+                                    <td class="centro">
+                                        <div class="contador pequeno">
+                                            <button type="button" @onclick="() => AjustarQuantidade(item, -1)">−</button>
+                                            <span>@item.Quantidade</span>
+                                            <button type="button" @onclick="() => AjustarQuantidade(item, 1)">+</button>
+                                        </div>
+                                    </td>
+                                    <td class="dir">
+                                        @if (item.CobertoPlano)
+                                        {
+                                            <span class="riscado">@item.ValorReferencia.ToString("C")</span>
+                                        }
+                                        else if (item.TipoItem == TipoItem.Plano)
+                                        {
+                                            @item.ValorUnitario.ToString("C")
+                                        }
+                                        else
+                                        {
+                                            <div class="campo-valor">
+                                                <InputMoeda Valor="item.ValorUnitario" ValorChanged="v => AlterarPreco(item, v)" />
+                                            </div>
+                                        }
+                                    </td>
+                                    <td class="dir">
+                                        @if (item.CobertoPlano || item.TipoItem == TipoItem.Plano)
+                                        {
+                                            <span class="suave">—</span>
+                                        }
+                                        else
+                                        {
+                                            <div class="campo-valor">
+                                                <InputMoeda Valor="item.Desconto" ValorChanged="v => AlterarDesconto(item, v)" />
+                                            </div>
+                                        }
+                                    </td>
+                                    <td class="dir subtotal-item">
+                                        @(item.CobertoPlano ? "grátis" : item.ValorTotal.ToString("C"))
+                                    </td>
+                                    <td class="centro">
+                                        <button type="button" class="remover" title="Remover"
+                                                @onclick="() => RemoverItem(item)">×</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <div class="itens-rodape">
+                @if (itens.Count > 0)
+                {
+                    @if (confirmandoLimpeza)
+                    {
+                        <span class="limpar-confirmar">
+                            Tirar todos os itens?
+                            <button type="button" class="limpar" @onclick="LimparItens">Sim, limpar</button>
+                            <button type="button" class="acao-campo" @onclick="() => confirmandoLimpeza = false">Não</button>
+                        </span>
+                    }
+                    else
+                    {
+                        <button type="button" class="limpar" @onclick="() => confirmandoLimpeza = true">Limpar lista</button>
+                    }
+                }
+                else
+                {
+                    <span></span>
+                }
+                <div class="somas">
+                    <span>Soma dos serviços: <strong>@SomaDo(TipoItem.Servico).ToString("C")</strong></span>
+                    <span>Soma dos produtos: <strong>@SomaDo(TipoItem.Produto).ToString("C")</strong></span>
+                    @if (PlanoJaNaVenda)
+                    {
+                        <span>Plano: <strong>@SomaDo(TipoItem.Plano).ToString("C")</strong></span>
+                    }
+                </div>
+            </div>
+        </section>
+    </div>
+
+    @* ================= FECHAMENTO ================= *@
+    <aside class="fechamento">
+        <div class="fechamento-topo">
+            <div>
+                <span class="fechamento-marca">Comanda · @((Editando ? dataVenda : DateTime.Now).ToString("dd/MM/yyyy HH:mm"))</span>
+                <h2>@(Editando ? $"Venda #{IdVendaEdicao}" : "Fechamento da venda")</h2>
+            </div>
+            <svg class="icone-caixa" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="10" width="18" height="10" rx="2" /><path d="M7 10V5h10v5M7 14h2M11 14h2M15 14h2M7 17h10" /></svg>
+        </div>
+
+        <div class="fechamento-corpo">
+            <div class="resumo-valores">
+                <div class="linha"><span>Subtotal</span><strong>@Subtotal.ToString("C")</strong></div>
+                @if (EconomiaPlano > 0)
+                {
+                    <div class="linha economia"><span>Crédito do plano</span><span>− @EconomiaPlano.ToString("C")</span></div>
+                }
+                <div class="linha linha-desconto">
+                    <label for="venda-desconto">Desconto na venda <span class="suave">(R$)</span></label>
+                    <span class="campo-desconto">
+                        <span class="suave">− R$</span>
+                        <InputMoeda Id="venda-desconto" disabled="@(itens.Count == 0)" @bind-Valor="desconto" />
+                    </span>
+                </div>
+                @if (desconto > Subtotal && itens.Count > 0)
+                {
+                    <span class="aviso-desconto">Limitado ao subtotal de @Subtotal.ToString("C")</span>
+                }
+                <div class="linha comissao">
+                    <span>Comissão estimada dos profissionais</span>
+                    <span>@ComissaoTotal.ToString("C")</span>
+                </div>
+                <div class="linha linha-desconto">
+                    <label for="venda-gorjeta">Gorjeta <span class="suave">(R$)</span></label>
+                    <span class="campo-desconto">
+                        <span class="suave">+ R$</span>
+                        <InputMoeda Id="venda-gorjeta" disabled="@(itens.Count == 0)" @bind-Valor="gorjeta" />
+                    </span>
+                </div>
+                @if (gorjeta > 0 && itens.Count > 0)
+                {
+                    <span class="aviso-desconto">
+                        @(ProfissionaisDaGorjeta > 1
+                            ? $"Dividida entre {ProfissionaisDaGorjeta} profissionais, paga na folha"
+                            : "Vai para o profissional na folha")
+                    </span>
+                }
+                <div class="linha total">
+                    <span>Total a pagar</span>
+                    <strong>@ACobrar.ToString("C")</strong>
+                </div>
+            </div>
+
+            <div>
+                <label class="rotulo">Profissional da venda <span class="obrigatorio">*</span></label>
+                <Seletor TItem="Funcionario" TValor="int"
+                         Itens="ProfissionaisDisponiveis"
+                         Valor="idFuncionario" ValorChanged="EscolherProfissional"
+                         TextoDe="@(f => f.NomeFuncionario ?? "Sem nome")"
+                         ValorDe="@(f => f.IdFuncionario)"
+                         ComAvatar="true"
+                         Placeholder="Selecione…"
+                         Class="seletor-profissional" />
+                <button type="button" class="acao-campo"
+                        @onclick="() => modalAberto = CadastroRapido.TipoCadastro.Funcionario">
+                    + Cadastrar profissional
+                </button>
+            </div>
+
+            @if (TudoPeloPlano)
+            {
+                <div class="pago-plano">
+                    <strong>Pago com crédito do plano</strong>
+                    <span>Nada a cobrar — o valor entrou na compra do plano.</span>
+                </div>
+            }
+            else
+            {
+                <div>
+                    <label class="rotulo">@(dividido ? "Adicionar forma de pagamento" : "Forma de pagamento")</label>
+                    <div class="formas">
+                        @foreach (var f in FormaPagamento.Todas)
+                        {
+                            <button type="button" class="forma forma-@f.Valor.ToLowerInvariant() @(pagamentos.Any(p => p.Forma == f.Valor) ? "ativa" : "")"
+                                    @onclick="() => EscolherForma(f.Valor)">
+                                <span class="forma-icone">@SiglaDaForma(f.Valor)</span>
+                                <span class="forma-texto">
+                                    <strong>@f.Rotulo</strong>
+                                    <small>@DicaDaForma(f.Valor)</small>
+                                </span>
+                            </button>
+                        }
+                        <button type="button" class="forma forma-fiado @(pagamentos.Any(p => p.Forma == FormaPagamento.AReceber) ? "ativa" : "")"
+                                disabled="@(clienteSelecionado == null)"
+                                title="@(clienteSelecionado == null ? "Escolha o cliente para vender fiado" : null)"
+                                @onclick="() => EscolherForma(FormaPagamento.AReceber)">
+                            <span class="forma-icone">⏳</span>
+                            <span class="forma-texto">
+                                <strong>A receber</strong>
+                                <small>Fiado: o cliente paga depois</small>
+                            </span>
+                        </button>
+                        <button type="button" class="forma forma-multiplo @(dividido ? "ativa" : "")"
+                                disabled="@(itens.Count == 0)" @onclick="AlternarDivisao">
+                            <span class="forma-icone">½</span>
+                            <span class="forma-texto">
+                                <strong>Múltiplo</strong>
+                                <small>Dividir em mais de uma forma</small>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+
+                @if (dividido)
+                {
+                    <div class="detalhe-pagamento">
+                        <ul class="pagamentos">
+                            @foreach (var p in pagamentos)
+                            {
+                                <li>
+                                    <span class="pagamento-forma">@FormaPagamento.Rotulo(p.Forma)</span>
+                                    <InputMoeda Valor="p.Valor" ValorChanged="v => p.Valor = v" />
+                                    @if (p.Forma == FormaPagamento.Credito)
+                                    {
+                                        <div class="contador pequeno">
+                                            <button type="button" @onclick="() => AjustarParcelas(p, -1)" disabled="@(p.Parcelas <= 1)">−</button>
+                                            <span>@(p.Parcelas ?? 1)×</span>
+                                            <button type="button" @onclick="() => AjustarParcelas(p, 1)" disabled="@(p.Parcelas >= 12)">+</button>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span></span>
+                                    }
+                                    <button type="button" class="remover" title="Remover" @onclick="() => RemoverPagamento(p)">×</button>
+                                </li>
+                            }
+                        </ul>
+                        @if (pagamentos.Count == 0)
+                        {
+                            <span class="suave">Escolha as formas acima; cada uma entra com o que falta.</span>
+                        }
+
+                        <div class="pagamentos-resumo @(Falta == 0 ? "fechado" : "aberto")">
+                            @if (Falta > 0)
+                            {
+                                <span>Falta @Falta.ToString("C")</span>
+                                @if (pagamentos.Count > 0)
+                                {
+                                    <button type="button" class="acao-campo" @onclick="Completar">Completar na última forma</button>
+                                }
+                            }
+                            else if (Falta < 0)
+                            {
+                                <span>Passou @Math.Abs(Falta).ToString("C") do total</span>
+                            }
+                            else
+                            {
+                                <span>Pagamento fechado</span>
+                            }
+                        </div>
+                    </div>
+                }
+                else if (pagamentos.Count == 1 && pagamentos[0].Forma == FormaPagamento.Credito)
+                {
+                    var credito = pagamentos[0];
+                    <div class="detalhe-pagamento campo-parcelas">
+                        <label class="rotulo">Parcelas</label>
+                        <div class="contador">
+                            <button type="button" @onclick="() => AjustarParcelas(credito, -1)" disabled="@(credito.Parcelas <= 1)">−</button>
+                            <span>@(credito.Parcelas ?? 1)×</span>
+                            <button type="button" @onclick="() => AjustarParcelas(credito, 1)" disabled="@(credito.Parcelas >= 12)">+</button>
+                        </div>
+                        @if (itens.Count > 0 && credito.Parcelas > 1)
+                        {
+                            <span class="valor-parcela">@((ACobrar / credito.Parcelas.Value).ToString("C")) cada</span>
+                        }
+                    </div>
+                }
+                else if (pagamentos.Count == 1 && pagamentos[0].Forma == FormaPagamento.Dinheiro && ACobrar > 0)
+                {
+                    @* So conta na tela: o troco nao e gravado. *@
+                    <div class="detalhe-pagamento troco">
+                        <div>
+                            <label class="rotulo">Valor recebido</label>
+                            <InputMoeda Valor="valorRecebido" ValorChanged="v => valorRecebido = v" />
+                        </div>
+                        <div>
+                            <label class="rotulo">Troco</label>
+                            <div class="valor-troco @(valorRecebido > 0 && valorRecebido < ACobrar ? "falta" : "")">
+                                @(valorRecebido > 0 && valorRecebido < ACobrar
+                                    ? $"Faltam {(ACobrar - valorRecebido):C}"
+                                    : Math.Max(0, valorRecebido - ACobrar).ToString("C"))
+                            </div>
+                        </div>
+                        <div class="notas-rapidas">
+                            @foreach (var nota in new[] { 50m, 100m, 200m })
+                            {
+                                <button type="button" @onclick="() => valorRecebido = nota">@nota.ToString("C0")</button>
+                            }
+                            <button type="button" @onclick="() => valorRecebido = ACobrar">Exato</button>
+                        </div>
+                    </div>
+                }
+            }
+
+            @if (!TudoPeloPlano && pagamentos.Any(p => p.Forma == FormaPagamento.AReceber))
+            {
+                <div class="detalhe-pagamento campo-parcelas">
+                    <label class="rotulo" for="venda-vencimento-fiado">Combinado para pagar em <span class="suave">(opcional)</span></label>
+                    <input id="venda-vencimento-fiado" type="date" class="form-control" @bind="vencimentoFiado" />
+                </div>
+            }
+
+            @if (Pendencias.Count > 0)
+            {
+                <ul class="pendencias">
+                    @foreach (var p in Pendencias)
+                    {
+                        <li>@p</li>
+                    }
+                </ul>
+            }
+
+            <button type="button" class="btn-confirmar btn-cta" disabled="@(!PodeConfirmar)" @onclick="Confirmar">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M8 12.5l2.5 2.5L16 9.5" /></svg>
+                @if (PodeConfirmar)
+                {
+                    <text>@(Editando ? "Salvar venda" : "Finalizar venda") — @ACobrar.ToString("C")</text>
+                }
+                else
+                {
+                    <text>@(Editando ? "Salvar venda" : "Finalizar venda")</text>
+                }
+            </button>
+        </div>
+    </aside>
+</div>
+
+
+@* Cadastro do que faltar, sem sair desta tela. *@
+<CadastroRapido Visivel="@(modalAberto != null)"
+                Tipo="@(modalAberto ?? CadastroRapido.TipoCadastro.Servico)"
+                OnCriado="AoCriarRegistro"
+                OnCancelado="() => modalAberto = null" />
+}
+
+@code {
+    private string? erro;
+
+    /// <summary>Agendamento que originou a venda: ao confirmar, ele fica concluído.</summary>
+    [Parameter] public int? IdAgendamento { get; set; }
+
+    /// <summary>Venda aberta para edicao; nulo e venda nova.</summary>
+    [Parameter] public int? IdVendaEdicao { get; set; }
+
+    /// <summary>Vindos do cadastro de cliente com plano: a venda abre com os dois.</summary>
+    [Parameter] public int? IdCliente { get; set; }
+    [Parameter] public int? IdPlano { get; set; }
+
+    private bool Editando => IdVendaEdicao is > 0;
+
+    /// <summary>Na edicao, a venda nao pode mais mudar por aqui (ver o erro).</summary>
+    private bool bloqueada;
+    private DateTime dataVenda;
+    private CadastroRapido.TipoCadastro? modalAberto;
+    private Caixa? caixaAberto;
+    private decimal valorAberturaCaixa;
+
+    // Cliente
+    private string termoBusca = "";
+    private List<Cliente> resultados = new();
+    private Cliente? clienteSelecionado;
+    private bool semCliente;
+    private string nomeRapido = "";
+
+    /// <summary>Lista suspensa da busca aberta enquanto o campo tem o foco.</summary>
+    private bool buscaAberta;
+
+    /// <summary>Agendamentos em aberto de hoje, oferecidos na busca do cliente.</summary>
+    private List<Agendamento> agendamentosHoje = new();
+
+    /// <summary>Agendamento que trouxe o cliente, para o selo "Agendado HH:mm".</summary>
+    private Agendamento? agendamentoImportado;
+
+    private List<Agendamento> AgendamentosDaBusca
+    {
+        get
+        {
+            var termo = termoBusca.Trim();
+            return agendamentosHoje
+                .Where(a => termo == ""
+                            || (a.NomeCliente ?? "").Contains(termo, StringComparison.OrdinalIgnoreCase)
+                            || (a.TelefoneCliente ?? "").Contains(termo))
+                .Take(8)
+                .ToList();
+        }
+    }
+    /// <summary>
+    /// Um cliente pode manter vários planos ao mesmo tempo, com serviços
+    /// diferentes, então aqui vem a lista inteira.
+    /// </summary>
+    private List<Assinatura> assinaturas = new();
+
+    /// <summary>Catálogo de planos, para vender qualquer um ao cliente.</summary>
+    private List<Plano> planos = new();
+
+    /// <summary>Um plano por venda: a assinatura é criada no fechamento.</summary>
+    private bool PlanoJaNaVenda => itens.Any(i => i.TipoItem == TipoItem.Plano);
+
+    private List<Assinatura> AssinaturasComCredito =>
+        assinaturas.Where(a => a.Utilizavel).ToList();
+
+    private List<Assinatura> AssinaturasEsgotadas =>
+        assinaturas.Where(a => !a.Utilizavel).ToList();
+
+    private int TotalCreditos =>
+        AssinaturasComCredito.Sum(a => a.TotalRestante);
+
+    // Catalogo
+    private List<Servico> servicos = new();
+    private List<Produto> produtos = new();
+    private List<Funcionario> funcionarios = new();
+    /// <summary>"" todos, "S"/"P" so servicos ou produtos, "S:id"/"P:id" uma categoria.</summary>
+    private string categoria = "";
+    private string filtroCatalogo = "";
+
+    /// <summary>Chips de filtro: tipos e as categorias que tem item ativo.</summary>
+    private List<Opcao> Categorias =>
+        new List<Opcao> { new("", "Todos"), new("S", "Serviços"), new("P", "Produtos") }
+            .Concat(servicos.Where(s => s.Ativo && s.IdCategoria.HasValue)
+                .GroupBy(s => (Id: s.IdCategoria!.Value, Nome: s.NomeCategoria ?? "Sem nome"))
+                .OrderBy(g => g.Key.Nome)
+                .Select(g => new Opcao($"S:{g.Key.Id}", g.Key.Nome)))
+            .Concat(produtos.Where(p => p.Ativo && p.IdCategoria.HasValue)
+                .GroupBy(p => (Id: p.IdCategoria!.Value, Nome: p.NomeCategoria ?? "Sem nome"))
+                .OrderBy(g => g.Key.Nome)
+                .Select(g => new Opcao($"P:{g.Key.Id}", g.Key.Nome)))
+            .ToList();
+
+    private bool confirmandoLimpeza;
+
+    /// <summary>Quanto o cliente entregou em dinheiro; só para o troco na tela.</summary>
+    private decimal valorRecebido;
+
+    // Venda
+    private List<VendaItem> itens = new();
+    private decimal desconto;
+    private decimal gorjeta;
+    private DateTime? vencimentoFiado;
+    /// <summary>O que o cliente escolhido ja deve em fiado (sem esta venda, na edicao).</summary>
+    private decimal saldoFiado;
+    private int idFuncionario;
+
+    /// <summary>Formas e valores. Com uma linha so, ela vale o total da venda.</summary>
+    private List<VendaPagamento> pagamentos = new();
+
+    /// <summary>Mais de uma forma: cada linha tem o seu valor e precisa fechar o total.</summary>
+    private bool dividido;
+
+    /// <summary>Preco e comissao proprios de cada profissional por servico.</summary>
+    private Dictionary<(int IdFuncionario, int IdServico), FuncionarioServico> precosProprios = new();
+
+    /// <summary>Itens cujo preco o operador digitou: trocar o profissional nao o sobrescreve.</summary>
+    private readonly HashSet<VendaItem> precoEditado = new();
+
+    // Inativos somem do catalogo; o que ja esta na nota continua resolvendo.
+    private List<Servico> ServicosFiltrados =>
+        servicos.Where(s => s.Ativo)
+            .Where(s => categoria is "" or "S" || categoria == $"S:{s.IdCategoria}")
+            .Where(s => string.IsNullOrWhiteSpace(filtroCatalogo)
+                        || (s.NomeServico ?? "").Contains(filtroCatalogo.Trim(), StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    private List<Produto> ProdutosFiltrados =>
+        produtos.Where(p => p.Ativo)
+            .Where(p => categoria is "" or "P" || categoria == $"P:{p.IdCategoria}")
+            .Where(p => string.IsNullOrWhiteSpace(filtroCatalogo)
+                        || (p.NomeProduto ?? "").Contains(filtroCatalogo.Trim(), StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    private List<Funcionario> ProfissionaisDisponiveis =>
+        funcionarios.Where(f => f.Ativo
+                                || f.IdFuncionario == idFuncionario
+                                || itens.Any(i => i.IdFuncionario == f.IdFuncionario))
+            .ToList();
+
+    private decimal Pago => dividido ? pagamentos.Sum(p => p.Valor) : (pagamentos.Count > 0 ? ACobrar : 0);
+    private decimal Falta => ACobrar - Pago;
+
+    private decimal Subtotal => itens.Sum(i => i.ValorTotal);
+    private decimal DescontoAplicado => Math.Min(Math.Max(0, desconto), Subtotal);
+    private decimal Total => Math.Round(Subtotal - DescontoAplicado, 2);
+    private decimal ComissaoTotal => itens.Sum(i => i.ComissaoTotal);
+
+    /// <summary>Venda mais gorjeta: o que os pagamentos têm de fechar.</summary>
+    private decimal ACobrar => Total + Math.Max(0, gorjeta);
+    private int ProfissionaisDaGorjeta => itens.Select(ProfissionalDo).Where(id => id > 0).Distinct().Count();
+
+    /// <summary>Quanto o cliente deixou de pagar por já ter o plano.</summary>
+    private decimal EconomiaPlano =>
+        itens.Where(i => i.CobertoPlano).Sum(i => i.ValorReferencia * i.Quantidade);
+
+    private bool ClientePronto => clienteSelecionado != null || semCliente;
+    /// <summary>
+    /// Venda inteiramente coberta por crédito de plano: nenhum dinheiro
+    /// circula, então não há forma de pagamento a escolher.
+    /// </summary>
+    private bool TudoPeloPlano => itens.Count > 0 && Total == 0 && gorjeta <= 0 && itens.All(i => i.CobertoPlano);
+
+    private bool TemPagamento => TudoPeloPlano || (pagamentos.Count > 0 && (!dividido || Falta == 0));
+
+    private bool PagamentoPronto => TemPagamento && idFuncionario > 0;
+
+    /// <summary>O que ainda falta, listado para o operador não ficar adivinhando.</summary>
+    private List<string> Pendencias
+    {
+        get
+        {
+            var lista = new List<string>();
+            // Na edicao a venda continua no caixa em que foi feita.
+            if (caixaAberto == null && !Editando) lista.Add("Abrir o caixa");
+            if (itens.Count == 0) lista.Add("Adicionar ao menos um item");
+            if (!TudoPeloPlano && pagamentos.Count == 0) lista.Add("Escolher a forma de pagamento");
+            else if (!TudoPeloPlano && dividido && Falta != 0) lista.Add("Fechar os pagamentos no total da venda");
+            if (idFuncionario <= 0) lista.Add("Informar o profissional");
+            if (!TudoPeloPlano && clienteSelecionado == null && pagamentos.Any(p => p.Forma == FormaPagamento.AReceber))
+                lista.Add("Escolher o cliente da venda a receber");
+            return lista;
+        }
+    }
+
+    private bool PodeConfirmar => Pendencias.Count == 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // O nome de quem esta logado fica gravado na abertura do caixa.
+        await auth.PrepararAsync();
+
+        try
+        {
+            servicos = servicoDAO.ListarTodos() ?? new();
+            produtos = produtoDAO.ListarTodos() ?? new();
+            funcionarios = funcionarioDAO.ListarTodos() ?? new();
+            planos = planoDAO.ListarTodos() ?? new();
+            precosProprios = funcionarioDAO.MapaServicos();
+            caixaAberto = caixaDAO.BuscarAberto();
+
+            if (!Editando)
+                agendamentosHoje = agendamentoDAO.Listar(DateTime.Today, DateTime.Today.AddDays(1), StatusAgendamento.Agendado);
+        }
+        catch (Exception ex)
+        {
+            erro = "Erro ao carregar os cadastros: " + ex.Message;
+        }
+
+        if (Editando) CarregarParaEdicao();
+        else
+        {
+            PreencherPeloAgendamento();
+            PreencherPeloCadastro();
+        }
+    }
+
+    /// <summary>Cliente cadastrado com plano: o plano já entra na venda, que vira a assinatura.</summary>
+    private void PreencherPeloCadastro()
+    {
+        if (IdCliente is not > 0 || clienteSelecionado != null) return;
+
+        SelecionarCliente(IdCliente.Value);
+        if (IdPlano is > 0 && clienteSelecionado != null) RenovarPlano(IdPlano.Value);
+    }
+
+    /// <summary>
+    /// Monta a tela com a venda gravada. Os creditos de plano que ela mesma
+    /// consumiu voltam ao saldo mostrado, para o limite de cada credito
+    /// valer igual ao da venda nova; o banco confere de novo ao salvar.
+    /// </summary>
+    private void CarregarParaEdicao()
+    {
+        try
+        {
+            var situacao = vendaDAO.SituacaoParaEditar(IdVendaEdicao!.Value);
+            var venda = vendaDAO.BuscarPorId(IdVendaEdicao.Value);
+
+            if (venda == null || situacao.Modo != VendaDAO.ModoEdicao.Completa)
+            {
+                erro = situacao.Motivo ?? "Venda não encontrada.";
+                bloqueada = true;
+                return;
+            }
+
+            dataVenda = venda.DataVenda;
+
+            if (venda.IdCliente is > 0) SelecionarCliente(venda.IdCliente.Value);
+            else semCliente = true;
+
+            itens = venda.Itens;
+
+            foreach (var item in itens.Where(i => i.CobertoPlano && i.IdSaldo.HasValue))
+            {
+                var saldo = assinaturas.SelectMany(a => a.Saldos).FirstOrDefault(x => x.IdSaldo == item.IdSaldo);
+                if (saldo != null) saldo.QuantidadeUsada = Math.Max(0, saldo.QuantidadeUsada - item.Quantidade);
+            }
+
+            pagamentos = venda.Pagamentos.Where(p => p.Forma != FormaPagamento.Plano).ToList();
+            dividido = pagamentos.Count > 1;
+            desconto = venda.Desconto;
+            gorjeta = venda.Gorjeta;
+            vencimentoFiado = venda.VencimentoFiado;
+            idFuncionario = venda.IdFuncionario ?? 0;
+        }
+        catch (Exception ex)
+        {
+            erro = "Erro ao carregar a venda: " + ex.Message;
+            bloqueada = true;
+        }
+    }
+
+    /// <summary>Venda vinda da agenda: cliente, profissional e serviço já entram na nota.</summary>
+    private void PreencherPeloAgendamento()
+    {
+        if (IdAgendamento is not > 0) return;
+
+        try
+        {
+            var agendamento = agendamentoDAO.BuscarPorId(IdAgendamento.Value);
+            if (agendamento == null || !agendamento.Aberto)
+            {
+                IdAgendamento = null;
+                return;
+            }
+
+            if (agendamento.IdCliente > 0) SelecionarCliente(agendamento.IdCliente);
+            idFuncionario = agendamento.IdFuncionario;
+            agendamentoImportado = agendamento;
+
+            foreach (var idServico in agendamento.IdsServicos)
+            {
+                var servico = servicos.FirstOrDefault(s => s.IdServico == idServico);
+                if (servico != null) AdicionarServico(servico);
+            }
+        }
+        catch (Exception ex)
+        {
+            erro = "Erro ao carregar o agendamento: " + ex.Message;
+        }
+    }
+
+    /// <summary>Abre o caixa sem sair da venda que já está sendo montada.</summary>
+    private void AbrirCaixa()
+    {
+        try
+        {
+            erro = null;
+            caixaDAO.Abrir(valorAberturaCaixa, auth.GetUsuarioNome());
+            caixaAberto = caixaDAO.BuscarAberto();
+            valorAberturaCaixa = 0;
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+    }
+
+    /// <summary>
+    /// Recarrega a lista afetada e já deixa o novo registro pronto para uso,
+    /// sem perder nada do que estava montado na venda.
+    /// </summary>
+    private void AoCriarRegistro(int id)
+    {
+        try
+        {
+            erro = null;
+
+            switch (modalAberto)
+            {
+                case CadastroRapido.TipoCadastro.Servico:
+                    servicos = servicoDAO.ListarTodos() ?? new();
+                    categoria = "S";
+                    filtroCatalogo = "";
+                    var novoServico = servicos.FirstOrDefault(s => s.IdServico == id);
+                    if (novoServico != null) AdicionarServico(novoServico);
+                    break;
+
+                case CadastroRapido.TipoCadastro.Produto:
+                    produtos = produtoDAO.ListarTodos() ?? new();
+                    categoria = "P";
+                    filtroCatalogo = "";
+                    var novoProduto = produtos.FirstOrDefault(p => p.IdProduto == id);
+                    if (novoProduto != null) AdicionarProduto(novoProduto);
+                    break;
+
+                case CadastroRapido.TipoCadastro.Cliente:
+                    SelecionarCliente(id);
+                    break;
+
+                case CadastroRapido.TipoCadastro.Funcionario:
+                    funcionarios = funcionarioDAO.ListarTodos() ?? new();
+                    EscolherProfissional(id);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+        finally
+        {
+            modalAberto = null;
+        }
+    }
+
+    // ---------- cliente ----------
+
+    /// <summary>Filtra enquanto digita; abaixo de 2 letras não vale a consulta.</summary>
+    private void BuscarClientes()
+    {
+        try
+        {
+            erro = null;
+
+            if (termoBusca.Trim().Length < 2)
+            {
+                resultados.Clear();
+                return;
+            }
+
+            resultados = clienteDAO.Buscar(termoBusca, 8);
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+    }
+
+    private void SelecionarCliente(int id)
+    {
+        try
+        {
+            erro = null;
+            clienteSelecionado = clienteDAO.BuscarPorId(id);
+            semCliente = false;
+            resultados.Clear();
+            termoBusca = "";
+
+            assinaturas = clienteSelecionado != null
+                ? assinaturaDAO.ListarAtivasDoCliente(clienteSelecionado.IdCliente)
+                : new();
+
+            saldoFiado = clienteSelecionado != null
+                ? contaReceberDAO.ListarAbertas(clienteSelecionado.IdCliente)
+                    .Where(c => c.IdVenda != IdVendaEdicao).Sum(c => c.Saldo)
+                : 0;
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+    }
+
+    /// <summary>Trocar o cliente desfaz também o vínculo com o agendamento.</summary>
+    private void TrocarCliente()
+    {
+        clienteSelecionado = null;
+        semCliente = false;
+        saldoFiado = 0;
+        assinaturas.Clear();
+        IdAgendamento = null;
+        agendamentoImportado = null;
+    }
+
+    /// <summary>
+    /// Traz um agendamento de hoje para a venda: cliente, profissional e
+    /// serviços, e ao confirmar ele fica concluído.
+    /// </summary>
+    private void ImportarAgendamento(Agendamento a)
+    {
+        buscaAberta = false;
+        IdAgendamento = a.IdAgendamento;
+        PreencherPeloAgendamento();
+    }
+
+    private static string Iniciais(string? nome)
+    {
+        var partes = (nome ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return partes.Length switch
+        {
+            0 => "—",
+            1 => partes[0][..Math.Min(2, partes[0].Length)].ToUpperInvariant(),
+            _ => $"{partes[0][0]}{partes[^1][0]}".ToUpperInvariant()
+        };
+    }
+
+    private void UsarSemCliente()
+    {
+        clienteSelecionado = null;
+        semCliente = true;
+        resultados.Clear();
+        termoBusca = "";
+    }
+
+    private void CadastrarComTermo()
+    {
+        nomeRapido = termoBusca;
+        SalvarCadastroRapido();
+    }
+
+    private void SalvarCadastroRapido()
+    {
+        try
+        {
+            erro = null;
+            var id = clienteDAO.InserirSomenteNome(nomeRapido);
+            nomeRapido = "";
+            SelecionarCliente(id);
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+    }
+
+    // ---------- catalogo ----------
+
+    private int QuantidadeNaNota(string tipo, int idRef) =>
+        itens.Where(i => i.TipoItem == tipo && i.IdReferencia == idRef && !i.CobertoPlano)
+             .Sum(i => i.Quantidade);
+
+    private void AdicionarServico(Servico s)
+    {
+        erro = null;
+        var item = new VendaItem
+        {
+            TipoItem = TipoItem.Servico,
+            IdReferencia = s.IdServico,
+            Descricao = s.NomeServico ?? "Serviço",
+            Quantidade = 1,
+            ValorUnitario = PrecoDe(s, idFuncionario)
+        };
+        Recalcular(item);
+        Somar(item);
+    }
+
+    private void AdicionarProduto(Produto p)
+    {
+        erro = null;
+        var item = new VendaItem
+        {
+            TipoItem = TipoItem.Produto,
+            IdReferencia = p.IdProduto,
+            Descricao = p.NomeProduto ?? "Produto",
+            Quantidade = 1,
+            ValorUnitario = (decimal)p.Valor
+        };
+        Recalcular(item);
+        Somar(item);
+    }
+
+    /// <summary>Soma na linha existente em vez de duplicar o item.</summary>
+    private void Somar(VendaItem novo)
+    {
+        var existente = itens.FirstOrDefault(i =>
+            i.TipoItem == novo.TipoItem &&
+            i.IdReferencia == novo.IdReferencia &&
+            i.CobertoPlano == novo.CobertoPlano &&
+            i.IdSaldo == novo.IdSaldo &&
+            i.ValorUnitario == novo.ValorUnitario &&
+            i.IdFuncionario == novo.IdFuncionario &&
+            i.Desconto == 0);
+
+        if (existente != null) existente.Quantidade += novo.Quantidade;
+        else itens.Add(novo);
+    }
+
+    // ---------- profissional, preco e comissao por item ----------
+
+    private int ProfissionalDo(VendaItem item) => item.IdFuncionario is > 0 ? item.IdFuncionario.Value : idFuncionario;
+
+    /// <summary>Preco proprio do profissional para o servico, ou o do cadastro.</summary>
+    private decimal PrecoDe(Servico s, int idProfissional) =>
+        precosProprios.TryGetValue((idProfissional, s.IdServico), out var proprio) && proprio.Preco is decimal preco
+            ? preco
+            : (decimal)s.PrecoServico;
+
+    /// <summary>
+    /// Congela no item a comissao pela regra atual (RegraComissao). O
+    /// credito de plano paga a comissao sobre o preco de referencia, a nao
+    /// ser que o plano diga que o assinante nao gera comissao.
+    /// </summary>
+    private void Recalcular(VendaItem item)
+    {
+        var idProfissional = ProfissionalDo(item);
+        var profissional = funcionarios.FirstOrDefault(f => f.IdFuncionario == idProfissional);
+
+        if (item.TipoItem == TipoItem.Servico)
+        {
+            var servico = servicos.FirstOrDefault(s => s.IdServico == item.IdReferencia);
+            if (servico == null) return;
+
+            if (item.CobertoPlano && PlanoSemComissao(item))
+            {
+                item.ComissaoUnitaria = 0;
+                return;
+            }
+
+            precosProprios.TryGetValue((idProfissional, servico.IdServico), out var proprio);
+            var baseUnitaria = item.CobertoPlano ? item.ValorReferencia : item.ValorUnitarioLiquido;
+            item.ComissaoUnitaria = RegraComissao.Servico(servico, profissional, proprio, baseUnitaria);
+        }
+        else if (item.TipoItem == TipoItem.Produto)
+        {
+            var produto = produtos.FirstOrDefault(p => p.IdProduto == item.IdReferencia);
+            if (produto == null) return;
+
+            item.ComissaoUnitaria = item.CobertoPlano
+                ? 0
+                : RegraComissao.Produto(produto, profissional, item.ValorUnitarioLiquido);
+        }
+    }
+
+    private bool PlanoSemComissao(VendaItem item)
+    {
+        var assinatura = assinaturas.FirstOrDefault(a => a.Saldos.Any(s => s.IdSaldo == item.IdSaldo));
+        var plano = planos.FirstOrDefault(p => p.IdPlano == assinatura?.IdPlano);
+        return plano?.RegraComissaoAssinante == RegraComissaoAssinante.SemComissao;
+    }
+
+    /// <summary>
+    /// Troca o profissional da venda. Os itens que seguem a venda passam a
+    /// ser dele: preco proprio (se o operador nao digitou outro) e comissao.
+    /// </summary>
+    private void EscolherProfissional(int id)
+    {
+        idFuncionario = id;
+
+        foreach (var item in itens.Where(i => i.IdFuncionario is not > 0))
+            AplicarProfissional(item);
+    }
+
+    private void TrocarProfissionalDoItem(VendaItem item, ChangeEventArgs e)
+    {
+        item.IdFuncionario = int.TryParse(e.Value?.ToString(), out var id) && id > 0 ? id : null;
+        AplicarProfissional(item);
+    }
+
+    private void AplicarProfissional(VendaItem item)
+    {
+        if (item.TipoItem == TipoItem.Servico && !item.CobertoPlano && !precoEditado.Contains(item))
+        {
+            var servico = servicos.FirstOrDefault(s => s.IdServico == item.IdReferencia);
+            if (servico != null) item.ValorUnitario = PrecoDe(servico, ProfissionalDo(item));
+        }
+
+        Recalcular(item);
+    }
+
+    private void AlterarPreco(VendaItem item, decimal valor)
+    {
+        precoEditado.Add(item);
+        item.ValorUnitario = Math.Max(0, valor);
+        item.Desconto = Math.Min(item.Desconto, Math.Round(item.ValorUnitario * item.Quantidade, 2));
+        Recalcular(item);
+    }
+
+    private void AlterarDesconto(VendaItem item, decimal valor)
+    {
+        item.Desconto = Math.Clamp(valor, 0, Math.Round(item.ValorUnitario * item.Quantidade, 2));
+        Recalcular(item);
+    }
+
+    /// <summary>Ajusta a quantidade direto na nota; zero remove a linha.</summary>
+    private void AjustarQuantidade(VendaItem item, int delta)
+    {
+        erro = null;
+        var nova = item.Quantidade + delta;
+
+        if (nova <= 0)
+        {
+            itens.Remove(item);
+            return;
+        }
+
+        // Item do plano nao pode passar do credito disponivel.
+        if (item.CobertoPlano && item.IdSaldo.HasValue && delta > 0)
+        {
+            var saldo = assinaturas
+                .SelectMany(a => a.Saldos)
+                .FirstOrDefault(s => s.IdSaldo == item.IdSaldo);
+            if (saldo != null && nova > saldo.Restante)
+            {
+                erro = $"O plano tem apenas {saldo.Restante} crédito(s) de {saldo.Descricao}.";
+                return;
+            }
+        }
+
+        item.Quantidade = nova;
+
+        // Com desconto em R$ na linha, o unitario liquido muda com a quantidade.
+        if (item.Desconto > 0)
+        {
+            item.Desconto = Math.Min(item.Desconto, Math.Round(item.ValorUnitario * item.Quantidade, 2));
+            Recalcular(item);
+        }
+    }
+
+    private void RemoverItem(VendaItem item)
+    {
+        itens.Remove(item);
+        precoEditado.Remove(item);
+    }
+
+    private void LimparItens()
+    {
+        itens.Clear();
+        precoEditado.Clear();
+        confirmandoLimpeza = false;
+    }
+
+    private decimal SomaDo(string tipo) =>
+        itens.Where(i => i.TipoItem == tipo).Sum(i => i.ValorTotal);
+
+    // ---------- pagamento ----------
+
+    /// <summary>
+    /// Sem dividir, escolher a forma troca a unica linha (que vale o total).
+    /// Dividido, cada forma nova entra com o que ainda falta.
+    /// </summary>
+    private void EscolherForma(string forma)
+    {
+        if (!dividido)
+        {
+            pagamentos = new()
+            {
+                new VendaPagamento { Forma = forma, Valor = ACobrar, Parcelas = forma == FormaPagamento.Credito ? 1 : null }
+            };
+            return;
+        }
+
+        if (pagamentos.Any(p => p.Forma == forma)) return;
+
+        pagamentos.Add(new VendaPagamento
+        {
+            Forma = forma,
+            Valor = Math.Max(0, Falta),
+            Parcelas = forma == FormaPagamento.Credito ? 1 : null
+        });
+    }
+
+    private void Dividir()
+    {
+        dividido = true;
+        if (pagamentos.Count == 1) pagamentos[0].Valor = ACobrar;
+    }
+
+    /// <summary>Liga e desliga o "Múltiplo"; desligar só com uma forma ou nenhuma.</summary>
+    private void AlternarDivisao()
+    {
+        if (!dividido)
+        {
+            Dividir();
+            return;
+        }
+
+        if (pagamentos.Count <= 1) dividido = false;
+    }
+
+    private static string SiglaDaForma(string forma) => forma switch
+    {
+        FormaPagamento.Dinheiro => "R$",
+        FormaPagamento.Pix => "PIX",
+        FormaPagamento.Debito => "DB",
+        FormaPagamento.Credito => "CR",
+        _ => "·"
+    };
+
+    private static string DicaDaForma(string forma) => forma switch
+    {
+        FormaPagamento.Dinheiro => "Com cálculo de troco",
+        FormaPagamento.Pix => "Transferência na hora",
+        FormaPagamento.Debito => "Na maquininha",
+        FormaPagamento.Credito => "À vista ou parcelado",
+        _ => ""
+    };
+
+    private void RemoverPagamento(VendaPagamento pagamento)
+    {
+        pagamentos.Remove(pagamento);
+        if (pagamentos.Count <= 1) dividido = false;
+    }
+
+    /// <summary>Joga o que falta (ou sobra) na ultima linha.</summary>
+    private void Completar()
+    {
+        var ultima = pagamentos.LastOrDefault();
+        if (ultima != null) ultima.Valor = Math.Max(0, ultima.Valor + Falta);
+    }
+
+    private void AjustarParcelas(VendaPagamento pagamento, int delta) =>
+        pagamento.Parcelas = Math.Clamp((pagamento.Parcelas ?? 1) + delta, 1, 12);
+
+    // ---------- credito do plano ----------
+
+    /// <summary>
+    /// Quantos créditos deste saldo já estão reservados nesta venda. A baixa
+    /// aparece na nota na hora, mas o banco só é tocado na confirmação.
+    /// </summary>
+    private int JaUsados(AssinaturaSaldo saldo) =>
+        itens.Where(i => i.CobertoPlano && i.IdSaldo == saldo.IdSaldo)
+             .Sum(i => i.Quantidade);
+
+    /// <summary>
+    /// Reserva um crédito do plano para esta venda: entra na nota por
+    /// R$ 0,00 e o abate do saldo acontece junto com o INSERT da venda.
+    /// </summary>
+    private void UsarCredito(AssinaturaSaldo saldo)
+    {
+        erro = null;
+
+        if (JaUsados(saldo) >= saldo.Restante)
+        {
+            erro = $"O plano tem apenas {saldo.Restante} crédito(s) de {saldo.Descricao}.";
+            return;
+        }
+
+        // O plano zera o preco, nao a comissao: o profissional executou o
+        // servico (Recalcular aplica a regra do plano).
+        var item = new VendaItem
+        {
+            TipoItem = saldo.TipoItem,
+            IdReferencia = saldo.IdReferencia,
+            Descricao = saldo.Descricao,
+            Quantidade = 1,
+            ValorUnitario = 0,
+            CobertoPlano = true,
+            IdSaldo = saldo.IdSaldo,
+            ValorReferencia = saldo.ValorReferencia
+        };
+        Recalcular(item);
+        Somar(item);
+    }
+
+    // ---------- plano ----------
+
+    /// <summary>Componentes do plano que está sendo vendido nesta venda.</summary>
+    private List<PlanoItem> itensDoPlanoVendido = new();
+
+    private void RenovarPlano(int idPlano)
+    {
+        var plano = planos.FirstOrDefault(p => p.IdPlano == idPlano);
+        if (plano != null) VenderPlano(plano);
+    }
+
+    /// <summary>
+    /// Põe o plano escolhido na venda. Ele é cobrado uma vez e, ao confirmar,
+    /// vira uma assinatura nova — que soma aos planos que o cliente já tenha.
+    /// </summary>
+    private void VenderPlano(Plano plano)
+    {
+        erro = null;
+
+        if (clienteSelecionado == null)
+        {
+            erro = "Selecione o cliente antes de vender um plano.";
+            return;
+        }
+
+        if (PlanoJaNaVenda)
+        {
+            erro = "Já há um plano nesta venda. Finalize e faça outra para vender um segundo.";
+            return;
+        }
+
+        itensDoPlanoVendido = planoDAO.ListarItens(plano.IdPlano);
+        if (itensDoPlanoVendido.Count == 0)
+        {
+            erro = $"O plano {plano.NomePlano} não tem componentes configurados, então não geraria créditos.";
+            return;
+        }
+
+        itens.Add(new VendaItem
+        {
+            TipoItem = TipoItem.Plano,
+            IdReferencia = plano.IdPlano,
+            Descricao = $"Plano {plano.NomePlano}",
+            Quantidade = 1,
+            ValorUnitario = (decimal)(plano.Valor ?? 0)
+        });
+    }
+
+
+    // ---------- confirmacao ----------
+
+    private void Confirmar()
+    {
+        try
+        {
+            erro = null;
+
+            if (!PodeConfirmar)
+            {
+                erro = "Falta: " + string.Join(", ", Pendencias).ToLowerInvariant() + ".";
+                return;
+            }
+
+            // Copia: o DAO completa a lista, e um erro nao pode deixar a tela
+            // com linhas que o operador nao pos.
+            var pagos = TudoPeloPlano
+                ? new List<VendaPagamento> { new() { Forma = FormaPagamento.Plano, Valor = 0 } }
+                : pagamentos.Select(p => new VendaPagamento
+                  {
+                      Forma = p.Forma,
+                      Valor = dividido ? p.Valor : ACobrar,
+                      Parcelas = p.Parcelas
+                  }).ToList();
+
+            if (Editando)
+            {
+                vendaDAO.Atualizar(new Venda
+                {
+                    IdVenda = IdVendaEdicao!.Value,
+                    IdCliente = clienteSelecionado?.IdCliente,
+                    IdFuncionario = idFuncionario,
+                    Pagamentos = pagos,
+                    Desconto = DescontoAplicado,
+                    Gorjeta = Math.Max(0, gorjeta),
+                    VencimentoFiado = vencimentoFiado,
+                    Itens = itens,
+                    // Vai gravado no movimento de estoque dos produtos.
+                    Usuario = auth.GetUsuarioNome()
+                });
+
+                Navigation.NavigateTo($"/vendas?editada={IdVendaEdicao}");
+                return;
+            }
+
+            var venda = new Venda
+            {
+                DataVenda = DateTime.Now,
+                IdCliente = clienteSelecionado?.IdCliente,
+                IdFuncionario = idFuncionario,
+                IdCaixa = caixaAberto?.IdCaixa,
+                Pagamentos = pagos,
+                Desconto = DescontoAplicado,
+                Gorjeta = Math.Max(0, gorjeta),
+                VencimentoFiado = vencimentoFiado,
+                Status = StatusVenda.Confirmada,
+                Itens = itens,
+                Usuario = auth.GetUsuarioNome()
+            };
+
+            // Se um plano foi vendido, a confirmação cria a assinatura
+            // com os créditos, na mesma transação.
+            var itemPlano = itens.FirstOrDefault(i => i.TipoItem == TipoItem.Plano);
+            if (itemPlano != null && clienteSelecionado != null)
+            {
+                var plano = planos.FirstOrDefault(p => p.IdPlano == itemPlano.IdReferencia);
+                venda.PlanoVendido = new Venda.PlanoParaAssinar
+                {
+                    IdPlano = itemPlano.IdReferencia!.Value,
+                    ValorPago = itemPlano.ValorTotal,
+                    Componentes = itensDoPlanoVendido,
+                    ValidadeDias = Periodicidade.Dias(plano?.Periodicidade)
+                };
+            }
+
+            var id = vendaDAO.Inserir(venda);
+
+            // A venda ja foi gravada: se marcar o agendamento falhar, nao
+            // desfaz a venda. Ele so continua aberto na agenda.
+            if (IdAgendamento is > 0)
+            {
+                try { agendamentoDAO.Concluir(IdAgendamento.Value, id); }
+                catch { }
+            }
+
+            Navigation.NavigateTo($"/vendas?nova={id}");
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+    }
+}

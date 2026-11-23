@@ -1,0 +1,13 @@
+@page "/produto/novo"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = Politicas.CriarProduto)]
+
+@using Barbearia.Models
+
+<PageTitle>Novo produto</PageTitle>
+
+<FormProduto Modelo="produto" Novo="true" />
+
+@code {
+    private readonly Produto produto = new();
+}

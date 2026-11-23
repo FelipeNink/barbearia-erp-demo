@@ -1,0 +1,33 @@
+.suave {
+    color: var(--texto-3);
+    font-size: 0.82em;
+}
+
+.bloco {
+    display: block;
+}
+
+.link-nome {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.link-nome:hover .nome-cliente {
+    text-decoration: underline;
+}
+
+.detalhe-conta td {
+    background: var(--superficie-2);
+    font-size: 0.86rem;
+}
+
+.subtitulo-secao {
+    margin: 1.75rem 0 0.75rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--texto-2);
+}

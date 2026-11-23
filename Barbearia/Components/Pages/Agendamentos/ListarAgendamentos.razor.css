@@ -1,0 +1,90 @@
+.filtros-agenda {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+}
+
+.filtros-agenda ::deep .filtro-status {
+    min-width: 200px;
+}
+
+.col-horario {
+    width: 120px;
+}
+
+/* Marcado pelo proprio cliente no link publico. */
+.selo-online {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--info-fundo);
+    color: var(--info-texto);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    vertical-align: 1px;
+}
+
+.col-status {
+    width: 140px;
+}
+
+@media (max-width: 760px) {
+    .col-horario {
+        width: 96px;
+    }
+
+    .col-status {
+        width: 110px;
+    }
+}
+
+/* Celular: a tabela cabe na tela. O valor some da linha (o total do dia
+   continua no cabecalho do dia) e as colunas se dividem pelo conteudo. */
+@media (max-width: 520px) {
+    .tabela.fixa .table {
+        table-layout: auto;
+    }
+
+    .col-horario,
+    .col-status {
+        width: auto;
+    }
+
+    .tabela.fixa th.col-acoes.quatro {
+        width: auto;
+    }
+
+    /* Dois botoes de 40px por linha. */
+    .tabela ::deep .acoes {
+        min-width: 84px;
+    }
+
+    .tabela .status {
+        white-space: nowrap;
+    }
+
+    .tabela table.table > thead > tr > th:first-child,
+    .tabela table.table > tbody > tr > td:first-child {
+        padding-left: 12px;
+    }
+
+    .tabela table.table > thead > tr > th:last-child,
+    .tabela table.table > tbody > tr > td:last-child {
+        padding-right: 12px;
+    }
+
+    .col-valor {
+        display: none;
+    }
+}
+
+/* Horario passado e aberto ganha "Marcar falta": com seis botoes, quebra
+   linha em vez de vazar da coluna. */
+.tabela ::deep .acoes {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}

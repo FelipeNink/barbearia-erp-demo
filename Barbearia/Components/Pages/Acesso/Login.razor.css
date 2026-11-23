@@ -1,0 +1,300 @@
+/* ===========================================================
+   Login "Vitrine"
+   Sem cartao, sem borda e sem sombra: o formulario fica direto
+   sobre o fundo. A faixa laranja no topo e a marca sustentam a
+   tela sozinhas.
+
+   Segue o tema que o App.razor aplica antes da primeira pintura.
+   =========================================================== */
+
+.login-vitrine {
+    min-height: 100vh;
+    /* dvh acompanha a barra do navegador que some ao rolar no celular. */
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    background: var(--fundo);
+    color: var(--texto);
+    font-family: var(--fonte);
+}
+
+.login-faixa {
+    height: 6px;
+    flex-shrink: 0;
+    background: var(--marca);
+}
+
+.login-centro {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 20px;
+}
+
+.login-coluna {
+    width: 100%;
+    max-width: 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 48px;
+}
+
+/* ---------- marca ---------- */
+
+.login-coluna ::deep .login-logo {
+    width: 320px;
+    max-width: 100%;
+    margin: 0 auto;
+    color: var(--login-letra);
+}
+
+.login-coluna ::deep .login-logo path {
+    fill: var(--marca);
+}
+
+/* ---------- formulario ---------- */
+
+/* ::deep porque o <form> vem do EditForm e os campos do InputText,
+   componentes filhos: o atributo de escopo nao chega neles. */
+.login-coluna ::deep form {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.login-coluna ::deep label {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--login-rotulo);
+}
+
+.login-coluna ::deep input {
+    height: 52px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0 14px;
+    border: 1px solid var(--login-campo-borda);
+    border-radius: 8px;
+    background: var(--login-campo);
+    color: var(--texto);
+    /* 16px evita o zoom automatico do iOS ao focar o campo. */
+    font: 400 16px var(--fonte);
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.login-coluna ::deep input::placeholder {
+    color: var(--login-placeholder);
+}
+
+.login-coluna ::deep input:hover {
+    border-color: var(--login-campo-borda-hover);
+}
+
+.login-coluna ::deep input:focus {
+    outline: none;
+    border-color: var(--marca);
+    box-shadow: var(--anel-foco);
+}
+
+
+/* ---------- entrar ---------- */
+
+.login-coluna ::deep button[type="submit"] {
+    margin-top: 6px;
+    height: 52px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--marca);
+    /* Nunca branco: sobre o laranja daria 3,2:1 de contraste. */
+    color: var(--sobre-marca);
+    font: 700 16px var(--fonte);
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.login-coluna ::deep button[type="submit"]:hover {
+    background: var(--marca-escura);
+}
+
+.login-coluna ::deep button[type="submit"]:focus-visible {
+    outline: none;
+    box-shadow: var(--anel-foco);
+}
+
+.login-coluna ::deep button[type="submit"]:disabled {
+    opacity: 0.6;
+    cursor: progress;
+}
+
+/* ---------- erro ---------- */
+
+.login-coluna ::deep .erro {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    background: var(--perigo-fundo);
+    color: var(--perigo);
+}
+
+.login-coluna ::deep .erro svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+/* ---------- rodape ---------- */
+
+.login-rodape {
+    padding: 0 16px 28px;
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--login-rodape);
+}
+
+/* ---------- mobile ---------- */
+
+@media (max-width: 480px) {
+    .login-faixa {
+        height: 4px;
+    }
+
+    /* Conteudo no terco superior: no celular o centro exato fica
+       escondido atras do teclado quando ele abre. */
+    .login-centro {
+        padding: 56px 20px 32px;
+        align-items: flex-start;
+    }
+
+    .login-coluna {
+        gap: 40px;
+    }
+
+    .login-coluna ::deep .login-logo {
+        width: 232px;
+    }
+
+    .login-rodape {
+        padding-bottom: max(24px, env(safe-area-inset-bottom));
+    }
+}
+
+/* Celular deitado e telas baixas. */
+@media (max-height: 560px) {
+    .login-centro {
+        padding-top: 24px;
+        padding-bottom: 24px;
+    }
+
+    .login-coluna {
+        gap: 24px;
+    }
+
+    .login-coluna ::deep .login-logo {
+        width: 180px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .login-vitrine *,
+    .login-vitrine ::deep * {
+        transition: none !important;
+    }
+}
+
+/* ---------- aviso de demonstracao ---------- */
+
+/* So existe nesta copia de portfolio. Fica abaixo do formulario, e nao
+   acima: quem chega aqui vai entrar, e o aviso nao pode empurrar o campo
+   de usuario para fora da primeira dobra. */
+.aviso-demo {
+    margin-top: 34px;
+    padding: 18px 20px;
+    border: 1px solid var(--login-campo-borda);
+    border-radius: var(--raio-cartao);
+    background: var(--login-campo);
+    text-align: left;
+}
+
+.aviso-demo h2 {
+    margin: 0 0 8px;
+    font-family: var(--fonte);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--marca);
+}
+
+.aviso-demo p {
+    margin: 0;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: var(--login-rotulo);
+}
+
+.aviso-demo strong {
+    color: var(--login-letra);
+    font-weight: 600;
+}
+
+.acessos-demo {
+    margin: 14px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.acessos-demo > div {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 10px;
+    align-items: baseline;
+}
+
+.acessos-demo dt {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--login-rodape);
+}
+
+.acessos-demo dd {
+    margin: 0;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: var(--login-rotulo);
+}
+
+.acessos-demo code {
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--login-campo-borda);
+    font-size: 0.78rem;
+    color: var(--login-letra);
+}
+
+/* A explicacao de cada acesso desce para a linha de baixo: ao lado do
+   usuario e da senha ela espremeria os dois. */
+.acessos-demo dd span {
+    display: block;
+    margin-top: 3px;
+    font-size: 0.76rem;
+    color: var(--login-rodape);
+}
+
+
+@media (max-width: 480px) {
+    .acessos-demo > div {
+        grid-template-columns: 1fr;
+        gap: 2px;
+    }
+}

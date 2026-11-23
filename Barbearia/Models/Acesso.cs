@@ -1,0 +1,20 @@
+namespace Barbearia.Models
+{
+    /// <summary>
+    /// Quem esta usando o sistema agora, resolvido a partir do token da
+    /// sessao. E o que o middleware, as guardas de pagina e o servico de
+    /// autorizacao recebem.
+    /// </summary>
+    public record Acesso(Usuario Usuario, int IdSessao, DateTime ExpiraEm)
+    {
+        public int IdUsuario => Usuario.IdUsr;
+        /// <summary>O nome da pessoa, para mostrar e para gravar no log.</summary>
+        public string Nome => Usuario.NomeVisivel;
+
+        /// <summary>O login, para a lista de sessoes e a tela de conta.</summary>
+        public string Login => Usuario.NomeUsr ?? "";
+        public bool EhAdmin => Usuario.EhAdmin;
+        public bool EhRaiz => Usuario.RaizUsr;
+        public bool PrecisaTrocarSenha => Usuario.TrocarSenhaUsr;
+    }
+}

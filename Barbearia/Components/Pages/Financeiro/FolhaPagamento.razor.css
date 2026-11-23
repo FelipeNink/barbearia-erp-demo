@@ -1,0 +1,336 @@
+/* ---------- seletor de mês ---------- */
+
+.seletor-mes {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.seta {
+    width: 2.1rem;
+    height: 2.1rem;
+    background: var(--superficie);
+    border: 1px solid var(--borda-3);
+    border-radius: 50%;
+    font-size: 1.2rem;
+    line-height: 1;
+    color: var(--texto-2);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.seta:hover:enabled {
+    background: var(--marca);
+    border-color: var(--marca);
+    color: var(--sobre-marca);
+}
+
+.seta:disabled {
+    color: var(--borda-3);
+    cursor: not-allowed;
+}
+
+.mes-atual {
+    min-width: 180px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--texto);
+    text-transform: capitalize;
+}
+
+/* ---------- resumo ---------- */
+
+.resumo {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    max-width: 900px;
+}
+
+.cartao-resumo {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.85rem 1rem;
+    background: var(--superficie);
+    border: 1px solid var(--borda-suave);
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+}
+
+.cartao-resumo.comissao { border-left-color: var(--roxo); }
+.cartao-resumo.total    { border-left-color: var(--marca); }
+.cartao-resumo.pendente { border-left-color: var(--perigo-escuro); }
+
+.cartao-resumo .rotulo {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--texto-fraco);
+}
+
+.cartao-resumo .valor {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--texto);
+}
+
+/* ---------- tabela ---------- */
+
+.dir { text-align: right; }
+
+.suave {
+    color: var(--texto-fraco);
+    font-size: 0.8rem;
+}
+
+.bloco {
+    display: block;
+}
+
+.contador {
+    display: inline-block;
+    min-width: 1.9rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 12px;
+    background: var(--morno);
+    color: var(--marca-escura);
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+
+.contador.produto {
+    background: var(--info-fundo);
+    color: var(--info-texto);
+}
+
+.comissao-valor {
+    font-weight: 600;
+    color: var(--roxo-texto);
+}
+
+.total-valor {
+    font-weight: 700;
+    color: var(--texto);
+}
+
+tr.pago {
+    opacity: 0.7;
+}
+
+.etiqueta {
+    display: inline-block;
+    padding: 0.1rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.etiqueta.paga {
+    background: var(--ok-fundo);
+    color: var(--ok-escuro);
+}
+
+.etiqueta.aberta {
+    background: var(--alerta-fundo);
+    color: var(--alerta);
+}
+
+.nota-rodape {
+    max-width: 720px;
+    margin: 1rem 0 0;
+    font-size: 0.82rem;
+    color: var(--texto-fraco);
+}
+
+/* ---------- pagamentos anteriores (modal) ---------- */
+
+.btn-historico {
+    margin-left: auto;
+    height: 40px;
+    padding: 0 16px;
+    display: inline-flex;
+    align-items: center;
+}
+
+.historico-topo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+
+.historico-topo ::deep .seletor {
+    min-width: 260px;
+}
+
+/* ---------- modal ---------- */
+
+.fundo-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
+    padding: 1.5rem;
+}
+
+.caixa-modal {
+    width: 100%;
+    max-width: 440px;
+    background: var(--superficie);
+    border-radius: 10px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+}
+
+.modal-topo {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--borda-suave);
+}
+
+.modal-topo h5 {
+    margin: 0;
+    font-weight: 700;
+    color: var(--texto);
+}
+
+.modal-corpo {
+    padding: 1.25rem;
+}
+
+.modal-corpo label {
+    display: block;
+    margin-bottom: 0.3rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--texto-fraco);
+}
+
+.modal-corpo .form-control {
+    margin-bottom: 1rem;
+}
+
+/* O Seletor e componente: sem ::deep a regra nao atravessa a fronteira,
+   e ele fica inline-block sem margem nenhuma. Num formulario ele vai
+   inteiro na largura, igual ao campo de Observacao logo abaixo, e
+   carrega a mesma margem do .form-control -- e dessa margem que o
+   .aviso-caixa se pendura com o margin-top negativo. */
+.modal-corpo ::deep .seletor {
+    display: block;
+    margin-bottom: 1rem;
+}
+
+.composicao {
+    margin-bottom: 1.25rem;
+    padding: 0.85rem 1rem;
+    background: var(--superficie-2);
+    border-radius: 8px;
+}
+
+.composicao > div {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.25rem 0;
+    font-size: 0.88rem;
+    color: var(--texto-2);
+}
+
+.composicao .informativo {
+    font-size: 0.8rem;
+    color: var(--texto-fraco);
+    font-style: italic;
+}
+
+.composicao .total {
+    margin-top: 0.4rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--borda-suave);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--texto);
+}
+
+.aviso-caixa {
+    margin: -0.5rem 0 1rem;
+    padding: 0.6rem 0.75rem;
+    background: var(--fundo);
+    border-radius: 6px;
+    font-size: 0.8rem;
+    color: var(--texto-3);
+}
+
+.aviso-caixa.alerta {
+    background: var(--alerta-fundo);
+    color: var(--alerta);
+}
+
+.modal-rodape {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    padding: 0.9rem 1.25rem;
+    border-top: 1px solid var(--borda-suave);
+}
+
+@media (max-width: 900px) {
+    .resumo {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Seletor de mes: setas como botao de icone e o mes em condensada,
+   que e a fonte dos numeros grandes no resto do sistema. */
+.seletor-mes .seta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    background: none;
+    border: 1px solid var(--borda-2);
+    border-radius: var(--raio);
+    font-size: 18px;
+    color: var(--texto-2);
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s;
+}
+
+.seletor-mes .seta:hover:enabled {
+    background: var(--superficie-3);
+    border-color: var(--borda-3);
+}
+
+.seletor-mes .seta:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.seletor-mes .mes-atual {
+    font-family: var(--fonte-titulo);
+    font-size: 24px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--texto);
+}
+
+/* Numeros de servicos e produtos tambem na condensada. */
+.contador {
+    font-family: var(--fonte-titulo);
+    font-variant-numeric: tabular-nums;
+}

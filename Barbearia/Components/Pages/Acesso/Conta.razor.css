@@ -1,0 +1,428 @@
+/* Tres colunas fixas e iguais, com os blocos da mesma linha na mesma
+   altura; os acessos abertos ocupam a linha de baixo inteira. Com
+   auto-fit, o bloco de linha inteira criava seis colunas vazias e os
+   tres de cima ficavam estreitos e cada um de uma altura. */
+.grade-conta {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    align-items: stretch;
+}
+
+@media (max-width: 900px) {
+    .grade-conta {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.bloco-conta {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 20px;
+}
+
+.bloco-conta h2 {
+    margin: 0;
+    font-family: var(--fonte-titulo);
+    font-size: 21px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+    color: var(--texto);
+}
+
+.bloco-conta p {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--texto-3);
+}
+
+.bloco-conta .btn {
+    align-self: flex-start;
+    height: var(--altura-controle);
+    padding: 0 18px;
+    display: inline-flex;
+    align-items: center;
+}
+
+/* ---------- identidade ---------- */
+
+.identidade {
+    flex-direction: row;
+    gap: 16px;
+}
+
+.avatar-conta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 54px;
+    height: 54px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--morno);
+    color: var(--marca-escura);
+    font-size: 19px;
+    font-weight: 700;
+}
+
+.identidade > div {
+    min-width: 0;
+}
+
+.identidade strong {
+    display: block;
+    font-family: var(--fonte-titulo);
+    font-size: 25px;
+    font-weight: 700;
+    text-transform: uppercase;
+    line-height: 1.05;
+    color: var(--texto);
+}
+
+.login-conta {
+    display: block;
+    margin-top: 1px;
+    font-size: 13px;
+    color: var(--texto-fraco);
+}
+
+.dados-conta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 12px 18px;
+    margin: 14px 0 0;
+}
+
+.dados-conta dt {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.11em;
+    color: var(--texto-3);
+}
+
+.dados-conta dd {
+    margin: 2px 0 0;
+    font-size: 14px;
+    color: var(--texto);
+}
+
+.etiqueta-raiz {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--marca);
+    color: var(--sobre-marca);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+/* ---------- tema ---------- */
+
+/* Mesmo trilho do controle de periodo do painel: duas opcoes do mesmo
+   conjunto, uma valendo por vez. */
+.escolha-tema {
+    display: inline-flex;
+    align-self: flex-start;
+    gap: 0;
+    padding: 3px;
+    border-radius: var(--raio);
+    background: var(--superficie-3);
+}
+
+.escolha-tema button {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 38px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    font-family: var(--fonte);
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--texto-3);
+    cursor: pointer;
+}
+
+.escolha-tema button svg {
+    width: 16px;
+    height: 16px;
+}
+
+.escolha-tema button.ativo {
+    background: var(--segmento-ativo);
+    color: var(--texto);
+    box-shadow: var(--sombra);
+}
+
+.escolha-tema button:focus-visible {
+    outline: 2px solid var(--marca);
+    outline-offset: -2px;
+}
+
+/* ---------- sessoes ---------- */
+
+.sessoes {
+    grid-column: 1 / -1;
+}
+
+.lista-sessoes {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 4px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.lista-sessoes li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 14px;
+    border: 1px solid var(--borda);
+    border-radius: var(--raio);
+    background: var(--superficie-2);
+}
+
+.lista-sessoes li > div {
+    flex: 1;
+    min-width: 0;
+}
+
+.lista-sessoes strong {
+    display: block;
+    font-size: 14px;
+    color: var(--texto);
+}
+
+.lista-sessoes span {
+    display: block;
+    margin-top: 2px;
+    font-size: 12.5px;
+    color: var(--texto-fraco);
+}
+
+.lista-sessoes .atual {
+    display: inline-block;
+    margin-left: 7px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--ok-fundo);
+    color: var(--ok-texto);
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.lista-sessoes .btn {
+    flex: none;
+    height: 34px;
+    padding: 0 14px;
+    font-size: 13px;
+}
+
+@media (max-width: 560px) {
+    .identidade {
+        flex-direction: column;
+    }
+
+    .lista-sessoes li {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .lista-sessoes .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* ---------- identidade visual ---------- */
+
+/* Ocupa a faixa inteira: sao duas fileiras de bolinhas mais a amostra
+   da logo, e espremido num terco da grade nada disso cabe. */
+.identidade-visual {
+    grid-column: 1 / -1;
+}
+
+.identidade-visual h3 {
+    margin: 14px 0 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--texto-fraco);
+}
+
+.dica-cor,
+.dica-logo {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--texto-3);
+}
+
+/* ---------- amostra da logo ---------- */
+
+/* Xadrez por baixo: a logo do sistema e transparente, e sem ele nao da
+   para ver se a imagem enviada tem fundo branco ou e recortada. */
+.vitrine-logo {
+    display: grid;
+    place-items: center;
+    min-height: 132px;
+    padding: 18px 20px;
+    border: 1px solid var(--borda);
+    border-radius: var(--raio-cartao);
+    background-color: var(--superficie-2);
+    background-image:
+        linear-gradient(45deg, var(--borda) 25%, transparent 25%, transparent 75%, var(--borda) 75%),
+        linear-gradient(45deg, var(--borda) 25%, transparent 25%, transparent 75%, var(--borda) 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 8px 8px;
+}
+
+.vitrine-logo ::deep .logo-amostra {
+    width: 100%;
+    max-width: 260px;
+    max-height: 96px;
+    /* object-fit nao vale para SVG embutido; a altura do contain da
+       imagem de fundo e quem limita a logo propria. */
+    height: auto;
+    color: var(--texto);
+}
+
+.acoes-logo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+/* O <input type="file"> some e o <label> em volta vira o botao: o campo
+   nativo nao aceita os tokens, e cada sistema operacional desenha um
+   botao diferente dentro dele. */
+.enviar-logo {
+    margin: 0;
+    cursor: pointer;
+}
+
+.enviar-logo ::deep input[type="file"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Sem :focus-visible aqui: o foco vai para o <input> escondido, e o
+   contorno tem de aparecer no rotulo que esta na tela. */
+.enviar-logo:focus-within {
+    border-color: var(--marca);
+    box-shadow: var(--anel-foco);
+}
+
+/* ---------- bolinhas ---------- */
+
+.bolinhas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    /* O anel da escolhida sai 2px para fora da bolinha; sem a margem ele
+       encostaria no texto da linha de cima. */
+    margin: 4px 0 2px;
+}
+
+/* Um botao de verdade, e nao uma <div role="button">: o Enter, o espaco,
+   o foco e o anuncio do estado ja vem de graca e nao precisam de
+   onKeyDown escrito a mao. */
+.bolinha {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    /* Botao vazio tem conteudo de largura zero, entao o flex pode
+       encolhe-lo ate sumir em vez de quebrar a linha. */
+    flex: 0 0 auto;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--amostra);
+    cursor: pointer;
+
+    /* Fio de contorno por dentro, e nao uma borda: borda somaria 2px ao
+       diametro e empurraria a cor para dentro. O fio existe para as
+       pontas do leque -- um branco ou um creme sobre o cartao claro, um
+       carvao sobre o cartao escuro -- que sem ele viram um buraco. */
+    --fio: rgba(0, 0, 0, 0.16);
+    box-shadow: inset 0 0 0 1px var(--fio);
+    transition: transform 0.2s;
+}
+
+/* O tema troca a variavel, e nao a sombra. Trocando a sombra, esta regra
+   venceria a da .escolhida por especificidade -- tem um seletor a mais
+   -- e a bolinha escolhida ficaria sem anel nenhum no tema escuro. */
+:root[data-tema="escuro"] .bolinha {
+    --fio: rgba(255, 255, 255, 0.22);
+}
+
+/* Afunda no clique. E a unica resposta ao toque: numa fileira de bolinha
+   encostada em bolinha, crescer no hover empurraria as vizinhas. */
+.bolinha:active {
+    transform: scale(0.9);
+}
+
+/* Contorno, e nao sombra: a sombra e onde mora o anel da escolhida, e as
+   duas brigariam pela mesma propriedade. */
+.bolinha:focus-visible {
+    outline: 2px solid var(--marca);
+    outline-offset: 3px;
+}
+
+/* A escolhida vira um alvo: a cor no meio, um vao na cor do cartao e a
+   cor outra vez por fora. O anel e da propria cor, e nao de um cinza
+   fixo, entao ele diz qual foi escolhida em vez de so cerca-la.
+
+   O fio aparece duas vezes, cercando o miolo e o anel. Sem ele, Branco
+   escolhido sobre o cartao claro some por inteiro: miolo branco, vao
+   branco e anel branco e um cartao em branco. Com ele sobram dois fios
+   concentricos, que ninguem confunde com o fio unico de uma bolinha
+   nao escolhida. */
+.bolinha.escolhida {
+    box-shadow:
+        inset 0 0 0 2px var(--superficie),
+        inset 0 0 0 3px var(--fio),
+        0 0 0 2px var(--amostra),
+        0 0 0 3px var(--fio);
+}
+
+/* A do padrao leva um ponto no meio, para continuar reconhecivel quando
+   alguma das escolhas tiver uma cor parecida. A cor do ponto vem do
+   proprio C#, que ja sabe se o que le em cima da amostra e preto ou
+   branco -- as duas padrao sao escuras, mas isso e verdade por ora. */
+.bolinha.padrao::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--ponto);
+}
+
+/* Com as duas marcas juntas o ponto encostaria no vao do alvo. */
+.bolinha.padrao.escolhida::after {
+    width: 5px;
+    height: 5px;
+}

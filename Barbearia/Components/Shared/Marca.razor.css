@@ -1,0 +1,124 @@
+/* O simbolo e a assinatura da marca: sempre na cor primaria, nas tres
+   variantes. */
+.marca-simbolo path,
+.marca-icone path {
+    fill: var(--marca);
+}
+
+/* ---------- completa ---------- */
+
+.marca-completa {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 100%;
+    /* Centra tambem quando quem chama troca o display -- a tela de login
+       forca block na marca para lhe dar largura e margem, e ai o flex
+       acima nao vale. Sem isto o desenho e a palavra encostam na
+       esquerda e a marca sai torta. */
+    text-align: center;
+}
+
+.marca-completa .marca-simbolo {
+    display: block;
+    width: 68%;
+    height: auto;
+    /* Margem, e nao gap: o gap so existe no modo flex. */
+    margin: 0 auto 14px;
+}
+
+.marca-palavra {
+    display: block;
+    font-family: var(--fonte-titulo);
+    font-size: 46px;
+    font-weight: 700;
+    line-height: 0.9;
+    text-transform: uppercase;
+    /* O espacamento sobra depois da ultima letra e desloca a palavra para
+       a esquerda; o padding compensa e devolve o centro optico. */
+    letter-spacing: 0.18em;
+    padding-left: 0.18em;
+    color: var(--login-letra);
+}
+
+/* ---------- compacta (lateral) ---------- */
+
+.marca-compacta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+}
+
+.marca-compacta .marca-simbolo {
+    width: 74px;
+    height: auto;
+}
+
+.marca-nome {
+    font-family: var(--fonte-titulo);
+    font-size: 23px;
+    font-weight: 700;
+    line-height: 0.92;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    padding-left: 0.2em;
+    color: var(--sobre-carvao);
+}
+
+/* ---------- icone (avatar) ---------- */
+
+.marca-icone {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: var(--carvao);
+    border-radius: 14px;
+}
+
+.marca-icone svg {
+    width: 62%;
+    height: auto;
+}
+
+/* ---------- logo propria ---------- */
+
+/* Quando a pessoa envia a propria logo, o desenho sai e a imagem dela
+   entra no mesmo lugar, nas tres variantes de uma vez.
+
+   Entra como fundo, e nao trocando o src de uma <img>: a troca e feita
+   em JS, e mexer no src de um elemento que o Blazor desenhou faria o
+   proximo redesenho desfaze-la. Uma variavel CSS no <html> o Blazor nao
+   toca. Tambem resolve a tela de login, que e renderizacao estatica e
+   nao tem circuito para reagir a nada.
+
+   contain, nunca cover: a logo de quem usa o sistema nao tem a
+   proporcao da nossa, e cover cortaria as bordas dela. */
+:root[data-logo="propria"] .marca-completa,
+:root[data-logo="propria"] .marca-compacta,
+:root[data-logo="propria"] .marca-icone svg {
+    background-image: var(--logo-propria);
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+}
+
+/* O desenho e a palavra saem juntos: a logo enviada ja traz o nome de
+   quem a enviou, e "BARBEARIA" embaixo dela sobraria. */
+:root[data-logo="propria"] .marca-simbolo,
+:root[data-logo="propria"] .marca-palavra,
+:root[data-logo="propria"] .marca-nome,
+:root[data-logo="propria"] .marca-icone svg > path {
+    display: none;
+}
+
+/* Sem o conteudo, as caixas perdem a altura que vinha do desenho. */
+:root[data-logo="propria"] .marca-completa {
+    min-height: 120px;
+}
+
+:root[data-logo="propria"] .marca-compacta {
+    min-height: 64px;
+}

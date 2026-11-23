@@ -1,0 +1,465 @@
+@page "/agendamentos"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = Politicas.Agendamentos)]
+
+@using Barbearia.Configs
+
+@inject AgendamentoDAO agendamentoDAO
+@inject FuncionarioDAO funcionarioDAO
+@inject ServicoDAO servicoDAO
+@inject NavigationManager Navigation
+
+<h1 class="titulo-listagem">Gestão de Agendamentos</h1>
+
+<div class="barra-acoes barra-listagem">
+    <BotaoExportar Tipo="BotaoExportar.Formato.Excel" Href="/excel/agendamentos" />
+    <ListaEspera />
+    <a href="/agendamento/novo" class="btn-novo btn-cadastrar">Cadastrar agendamento</a>
+</div>
+
+@if (Novo.HasValue)
+{
+    <div class="alert alert-success">Agendamento #@Novo registrado com sucesso.</div>
+}
+@if (!string.IsNullOrEmpty(erro))
+{
+    <div class="alert alert-danger">@erro</div>
+}
+
+@* ---------- filtros ---------- *@
+<section class="filtros">
+    <div class="campo">
+        <label>De</label>
+        <input type="date" class="form-control" @bind="de" @bind:after="Aplicar" />
+    </div>
+    <div class="campo">
+        <label>Até</label>
+        <input type="date" class="form-control" @bind="ate" @bind:after="Aplicar" />
+    </div>
+    <div class="campo campo-largo">
+        <label>Cliente</label>
+        <input class="form-control" placeholder="Nome ou telefone do cliente"
+               @bind="cliente" @bind:event="oninput" @bind:after="FiltrarNaTela" />
+    </div>
+    <div class="campo">
+        <label>Profissional</label>
+        <Seletor TItem="OpcaoId" TValor="int" Itens="OpcoesFuncionario"
+                 @bind-Valor="idFuncionario" @bind-Valor:after="FiltrarNaTela" TextoDe="o => o.Rotulo" ValorDe="o => o.Id"
+                 ComAvatar="true" />
+    </div>
+    <div class="campo">
+        <label>Serviço</label>
+        <Seletor TItem="OpcaoId" TValor="int" Itens="OpcoesServico"
+                 @bind-Valor="idServico" @bind-Valor:after="FiltrarNaTela" TextoDe="o => o.Rotulo" ValorDe="o => o.Id" />
+    </div>
+    <div class="campo">
+        <label>Status</label>
+        <Seletor TItem="Opcao" TValor="string" Itens="OpcoesFiltroStatus"
+                 @bind-Valor="filtroStatus" @bind-Valor:after="Aplicar" TextoDe="o => o.Rotulo" ValorDe="o => o.Valor"
+                 PontoDe="o => o.Cor" />
+    </div>
+    <div class="campo-acoes">
+        <button type="button" class="btn btn-primary" @onclick="Aplicar">Filtrar</button>
+        <button type="button" class="btn btn-outline-secondary" @onclick="Limpar">Limpar</button>
+    </div>
+</section>
+
+<div class="filtros-agenda">
+    <div class="atalhos-periodo">
+        <button type="button" class="@(periodo == Periodo.Hoje ? "ativo" : "")" @onclick="() => Filtrar(Periodo.Hoje)">Hoje</button>
+        <button type="button" class="@(periodo == Periodo.Amanha ? "ativo" : "")" @onclick="() => Filtrar(Periodo.Amanha)">Amanhã</button>
+        <button type="button" class="@(periodo == Periodo.Semana ? "ativo" : "")" @onclick="() => Filtrar(Periodo.Semana)">Esta semana</button>
+        <button type="button" class="@(periodo == Periodo.Mes ? "ativo" : "")" @onclick="() => Filtrar(Periodo.Mes)">Este mês</button>
+    </div>
+</div>
+
+@* ---------- resumo ---------- *@
+<div class="resumo">
+    <div class="cartao-resumo">
+        <span class="rotulo">Agendados</span>
+        <strong class="valor">@agendamentos.Count(a => a.Status == StatusAgendamento.Agendado)</strong>
+    </div>
+    <div class="cartao-resumo">
+        <span class="rotulo">Concluídos</span>
+        <strong class="valor">@agendamentos.Count(a => a.Status == StatusAgendamento.Concluido)</strong>
+    </div>
+    @* Marcadas como falta e agendados com horario ja passado, a mesma
+       regra do relatorio de faltas (RelatoriosDAO.Faltas). *@
+    <div class="cartao-resumo prejuizo">
+        <span class="rotulo">Faltas</span>
+        <strong class="valor">@agendamentos.Count(Faltou)</strong>
+    </div>
+    <div class="cartao-resumo">
+        <span class="rotulo">Cancelados</span>
+        <strong class="valor">@agendamentos.Count(a => a.Status == StatusAgendamento.Cancelado)</strong>
+    </div>
+</div>
+
+@* Os horarios de amanha que ainda nao confirmaram, com o lembrete pronto. *@
+<LembretesAmanha Recolhido="true" />
+
+<div class="tabela fixa">
+    <table class="table">
+        <thead>
+            <tr>
+                <th class="col-horario">Hora</th>
+                <th>Cliente</th>
+                <th class="opcional">Serviços</th>
+                <th class="opcional">Profissional</th>
+                <th class="al-dir opcional">Duração</th>
+                <th class="al-dir col-valor">Valor</th>
+                <th class="col-status">Status</th>
+                <th class="col-acoes quatro">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (agendamentos.Count > 0)
+            {
+                @foreach (var dia in agendamentos.GroupBy(a => a.DataHora.Date))
+                {
+                    <tr class="grupo-dia">
+                        <td colspan="8">
+                            <span class="grupo-dia-titulo">@RotuloDoDia(dia.Key)</span>
+                            <span class="grupo-dia-resumo">
+                                @dia.Count() horário(s) · @dia.Where(a => a.Status != StatusAgendamento.Cancelado && a.Status != StatusAgendamento.Faltou).Sum(a => a.PrecoServico).ToString("C")
+                            </span>
+                        </td>
+                    </tr>
+
+                    @foreach (var a in dia)
+                    {
+                        <tr class="@(a.Status == StatusAgendamento.Cancelado ? "cancelada" : "")">
+                            <td><span class="hora">@a.DataHora.ToString("HH:mm")</span></td>
+                            <td>
+                                <span class="nome-cliente">@(a.NomeCliente ?? "—")</span>
+                                @if (a.Online)
+                                {
+                                    <span class="selo-online" title="Marcado pelo cliente no link de agendamento">online</span>
+                                }
+                            </td>
+                            <td class="opcional"><span class="descritivo">@(a.NomeServico ?? "—")</span></td>
+                            <td class="opcional"><span class="descritivo">@(a.NomeFuncionario ?? "—")</span></td>
+                            <td class="al-dir opcional"><span class="descritivo">@a.DuracaoMin min</span></td>
+                            <td class="col-num col-valor">@a.PrecoServico.ToString("C")</td>
+                            <td>
+                                <span class="status @(a.Confirmado ? "pago" : ClasseStatus(a.Status))">
+                                    <i></i>@a.RotuloStatus
+                                </span>
+                            </td>
+                            <td class="col-acoes">
+                                <AcoesLinha OnVisualizar="() => Visualizar(a)" OnEditar="() => Editar(a)"
+                                            OnExcluir="() => excluindo = a">
+                                    @if (a.Aberto && a.DataHora < DateTime.Now)
+                                    {
+                                        <button type="button" class="btn-acao perigo" title="Marcar falta" aria-label="Marcar falta"
+                                                @onclick="() => MarcarFalta(a)">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                                                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                <circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6M16 16l5 5M21 16l-5 5" />
+                                            </svg>
+                                        </button>
+                                    }
+                                    @if (a.Aberto)
+                                    {
+                                        <BotaoWhatsApp Telefone="@a.TelefoneCliente"
+                                                       Titulo="Confirmar horário no WhatsApp"
+                                                       Mensagem="@WhatsApp.ConfirmacaoAgendamento(a.NomeCliente, a.DataHora, a.NomeServico, a.NomeFuncionario)" />
+                                        <a href="@UrlGerarVenda(a)" class="btn-acao" title="Gerar venda" aria-label="Gerar venda">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                                                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                <path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6" />
+                                            </svg>
+                                        </a>
+                                    }
+                                </AcoesLinha>
+                            </td>
+                        </tr>
+                    }
+                }
+            }
+            else
+            {
+                <tr>
+                    <td colspan="8" class="vazio">Nenhum agendamento neste período.</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@* ---------- visualizar ---------- *@
+<ConfirmarModal Visivel="@(excluindo != null)" Titulo="Excluir agendamento" Erro="@erroExclusao"
+                OnConfirmar="ConfirmarExclusao" OnCancelar="CancelarExclusao">
+    Tem certeza que deseja excluir <strong>@excluindo?.NomeCliente</strong> (@excluindo?.DataHora.ToString("dd/MM 'às' HH:mm"))?<br />
+    <span class="text-muted">Esta ação não pode ser desfeita.</span>
+</ConfirmarModal>
+
+<Janela Visivel="@(visualizando != null)" Titulo="@($"Agendamento #{visualizando?.IdAgendamento}")"
+        OnFechar="Fechar">
+    <ChildContent>
+        @if (visualizando != null)
+        {
+            <dl class="ficha">
+                <div>
+                    <dt>Data</dt>
+                    <dd>@visualizando.DataHora.ToString("dd/MM/yyyy")</dd>
+                </div>
+                <div>
+                    <dt>Horário</dt>
+                    <dd>@visualizando.DataHora.ToString("HH:mm") às @visualizando.Fim.ToString("HH:mm") (@visualizando.DuracaoMin min)</dd>
+                </div>
+                <div>
+                    <dt>Cliente</dt>
+                    <dd>
+                        @(visualizando.NomeCliente ?? "—")
+                        @if (visualizando.Online)
+                        {
+                            <span class="selo-online" title="Marcado pelo cliente no link de agendamento">online</span>
+                        }
+                    </dd>
+                </div>
+                <div>
+                    <dt>Telefone</dt>
+                    <dd class="@(string.IsNullOrWhiteSpace(visualizando.TelefoneCliente) ? "vazio-campo" : "")">
+                        @(string.IsNullOrWhiteSpace(visualizando.TelefoneCliente) ? "Não informado" : visualizando.TelefoneCliente)
+                    </dd>
+                </div>
+                <div>
+                    <dt>Serviço</dt>
+                    <dd>@(visualizando.NomeServico ?? "—") · @visualizando.PrecoServico.ToString("C")</dd>
+                </div>
+                <div>
+                    <dt>Profissional</dt>
+                    <dd>@(visualizando.NomeFuncionario ?? "—")</dd>
+                </div>
+                <div>
+                    <dt>Status</dt>
+                    <dd>
+                        <span class="status @(visualizando.Confirmado ? "pago" : ClasseStatus(visualizando.Status))">
+                            <i></i>@visualizando.RotuloStatus
+                        </span>
+                    </dd>
+                </div>
+                <div>
+                    <dt>Venda</dt>
+                    <dd class="@(visualizando.IdVenda.HasValue ? "" : "vazio-campo")">
+                        @(visualizando.IdVenda.HasValue ? $"#{visualizando.IdVenda}" : "Nenhuma gerada")
+                    </dd>
+                </div>
+                <div class="largo">
+                    <dt>Observação</dt>
+                    <dd class="@(string.IsNullOrWhiteSpace(visualizando.Observacao) ? "vazio-campo" : "")">
+                        @(string.IsNullOrWhiteSpace(visualizando.Observacao) ? "Sem observação" : visualizando.Observacao)
+                    </dd>
+                </div>
+            </dl>
+        }
+    </ChildContent>
+    <Rodape>
+        <button type="button" class="btn btn-outline-secondary" @onclick="Fechar">Fechar</button>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => Editar(visualizando!)">Editar</button>
+        @if (visualizando?.Aberto == true)
+        {
+            <a href="@UrlGerarVenda(visualizando)" class="btn btn-primary">Gerar venda</a>
+        }
+    </Rodape>
+</Janela>
+
+@* ---------- editar ---------- *@
+@code {
+    private Agendamento? excluindo;
+    private string? erroExclusao;
+
+    private void ConfirmarExclusao()
+    {
+        if (excluindo == null) return;
+
+        try
+        {
+            agendamentoDAO.Excluir(excluindo.IdAgendamento);
+            excluindo = null;
+            erroExclusao = null;
+            Carregar();
+        }
+        catch (Exception ex)
+        {
+            erroExclusao = ex.Message;
+        }
+    }
+
+    private void CancelarExclusao()
+    {
+        excluindo = null;
+        erroExclusao = null;
+    }
+
+    private enum Periodo { Hoje, Amanha, Semana, Mes }
+
+    [SupplyParameterFromQuery(Name = "novo")]
+    private int? Novo { get; set; }
+
+    private List<Agendamento> agendamentos = new();
+
+    /// <summary>O que veio do banco pelo periodo e status; cliente, profissional e servico filtram aqui, sem nova consulta.</summary>
+    private List<Agendamento> carregados = new();
+
+    /// <summary>Atalho em uso; nulo quando as datas foram digitadas.</summary>
+    private Periodo? periodo = Periodo.Hoje;
+    private DateTime? de = DateTime.Today;
+    private DateTime? ate = DateTime.Today;
+    private string cliente = "";
+    private int idFuncionario;
+    private int idServico;
+    private string filtroStatus = "";
+    private string? erro;
+
+    private List<OpcaoId> OpcoesFuncionario = new() { new(0, "Todos") };
+    private List<OpcaoId> OpcoesServico = new() { new(0, "Todos") };
+
+    private Agendamento? visualizando;
+
+    private static readonly List<Opcao> OpcoesFiltroStatus = new()
+    {
+        new("", "Todos"),
+        new(StatusAgendamento.Agendado, "Agendado", "var(--alerta)"),
+        new(StatusAgendamento.Concluido, "Concluído", "var(--ok)"),
+        new(StatusAgendamento.Cancelado, "Cancelado", "var(--texto-fraco)"),
+        new(StatusAgendamento.Faltou, "Faltou", "var(--perigo)")
+    };
+
+    private static bool Faltou(Agendamento a) =>
+        a.Status == StatusAgendamento.Faltou
+        || (a.Status == StatusAgendamento.Agendado && a.DataHora < DateTime.Now);
+
+    private void MarcarFalta(Agendamento a)
+    {
+        try
+        {
+            erro = null;
+            agendamentoDAO.MarcarFalta(a.IdAgendamento);
+            Carregar();
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        try
+        {
+            OpcoesFuncionario.AddRange(funcionarioDAO.ListarTodos()
+                .Select(f => new OpcaoId(f.IdFuncionario, f.NomeFuncionario ?? "Sem nome")));
+            OpcoesServico.AddRange(servicoDAO.ListarTodos()
+                .OrderBy(s => s.NomeServico)
+                .Select(s => new OpcaoId(s.IdServico, s.NomeServico ?? "Sem nome")));
+        }
+        catch (Exception ex)
+        {
+            erro = "Erro ao carregar os filtros: " + ex.Message;
+        }
+
+        Carregar();
+    }
+
+    private void Filtrar(Periodo novo)
+    {
+        var hoje = DateTime.Today;
+        // Semana de segunda a domingo.
+        var segunda = hoje.AddDays(-(((int)hoje.DayOfWeek + 6) % 7));
+        var primeiroDoMes = new DateTime(hoje.Year, hoje.Month, 1);
+
+        switch (novo)
+        {
+            case Periodo.Hoje: de = hoje; ate = hoje; break;
+            case Periodo.Amanha: de = hoje.AddDays(1); ate = hoje.AddDays(1); break;
+            case Periodo.Semana: de = segunda; ate = segunda.AddDays(6); break;
+            default: de = primeiroDoMes; ate = primeiroDoMes.AddMonths(1).AddDays(-1); break;
+        }
+
+        periodo = novo;
+        Carregar();
+    }
+
+    private void Aplicar()
+    {
+        periodo = null;
+        Carregar();
+    }
+
+    private void Limpar()
+    {
+        cliente = "";
+        idFuncionario = 0;
+        idServico = 0;
+        filtroStatus = "";
+        Filtrar(Periodo.Hoje);
+    }
+
+    private void Carregar()
+    {
+        try
+        {
+            erro = null;
+
+            // 'ate' e exclusivo no SQL: soma um dia para incluir o dia escolhido.
+            carregados = agendamentoDAO.Listar(de, ate?.AddDays(1), filtroStatus);
+            FiltrarNaTela();
+        }
+        catch (Exception ex)
+        {
+            erro = "Erro ao carregar os agendamentos: " + ex.Message;
+        }
+    }
+
+    /// <summary>
+    /// Filtra o que ja foi carregado, a cada letra digitada. O telefone
+    /// casa so pelos digitos: "99123" acha "(48) 99123-4567".
+    /// </summary>
+    private void FiltrarNaTela()
+    {
+        var termo = cliente.Trim();
+        var digitos = Documentos.SoDigitos(termo);
+
+        agendamentos = carregados
+            .Where(a => termo.Length == 0
+                        || (a.NomeCliente ?? "").Contains(termo, StringComparison.OrdinalIgnoreCase)
+                        || (digitos.Length >= 3 && Documentos.SoDigitos(a.TelefoneCliente).Contains(digitos)))
+            .Where(a => idFuncionario == 0 || a.IdFuncionario == idFuncionario)
+            .Where(a => idServico == 0 || a.IdsServicos.Contains(idServico))
+            .ToList();
+    }
+
+    private void Visualizar(Agendamento a)
+    {
+        visualizando = a;
+    }
+
+    /// <summary>A edicao e uma pagina propria, com o mesmo formulario do cadastro.</summary>
+    private void Editar(Agendamento a) => Navigation.NavigateTo($"/agendamento/{a.IdAgendamento}");
+
+    private void Fechar() => visualizando = null;
+
+
+    private static string UrlGerarVenda(Agendamento a) => $"/venda/nova?agendamento={a.IdAgendamento}";
+
+    private static string ClasseStatus(string status) => status switch
+    {
+        StatusAgendamento.Agendado => "pendente",
+        StatusAgendamento.Concluido => "pago",
+        StatusAgendamento.Faltou => "erro",
+        _ => "cancelada"
+    };
+
+    private static string RotuloDoDia(DateTime dia)
+    {
+        var cultura = new System.Globalization.CultureInfo("pt-BR");
+        var semana = cultura.DateTimeFormat.GetDayName(dia.DayOfWeek);
+        var corpo = $"{semana}, {dia:dd/MM}".ToUpper(cultura);
+
+        if (dia == DateTime.Today) return $"HOJE · {corpo}";
+        if (dia == DateTime.Today.AddDays(1)) return $"AMANHÃ · {corpo}";
+        return corpo;
+    }
+}

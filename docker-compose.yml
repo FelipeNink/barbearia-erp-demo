@@ -1,0 +1,55 @@
+# Sobe a demonstracao inteira: banco e aplicacao.
+#
+#   cp .env.example .env     # e troque as senhas
+#   docker compose up --build
+#   docker compose run --rm app dotnet Barbearia.dll --dados-exemplo
+#
+# E uma demonstracao local. Nao use este arquivo para colocar o sistema
+# no ar: aqui o banco nao tem backup, o TLS nao existe e as senhas vem de
+# um .env de exemplo.
+
+services:
+  banco:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?defina no .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-barbearia}
+      MYSQL_USER: ${MYSQL_USER:-barbearia}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?defina no .env}
+      TZ: ${TZ:-America/Sao_Paulo}
+    # So na propria maquina. Sem o 127.0.0.1 o Docker abre a porta para a
+    # rede inteira, e um MySQL de demonstracao exposto e um convite.
+    ports:
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - dados-mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      banco:
+        condition: service_healthy
+    environment:
+      # O usuario da aplicacao nao e o root do MySQL: se a aplicacao for
+      # comprometida, o estrago para no banco dela.
+      ConnectionStrings__MySqlConnection: >-
+        Server=banco;Port=3306;Database=${MYSQL_DATABASE:-barbearia};
+        User=${MYSQL_USER:-barbearia};Password=${MYSQL_PASSWORD}
+      # Criam o primeiro acesso na primeira subida, e so nela. Depois
+      # disso o sistema ignora as duas -- o cadastro passa a ser pela
+      # tela de Equipe.
+      ADMIN_USUARIO: ${ADMIN_USUARIO:?defina no .env}
+      ADMIN_SENHA: ${ADMIN_SENHA:?defina no .env}
+      TZ: ${TZ:-America/Sao_Paulo}
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  dados-mysql:

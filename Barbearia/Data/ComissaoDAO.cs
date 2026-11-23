@@ -1,0 +1,214 @@
+using Barbearia.Configs;
+using Barbearia.Models;
+using MySqlConnector;
+
+namespace Barbearia.Data
+{
+    /// <summary>Ganho por comissão de cada profissional e o acerto de pagamento.</summary>
+    public class ComissaoDAO
+    {
+        private readonly Conexao _conexao;
+
+        public ComissaoDAO(Conexao conexao)
+        {
+            _conexao = conexao;
+        }
+
+        public class ResumoProfissional
+        {
+            public int IdFuncionario { get; set; }
+            public string NomeFuncionario { get; set; } = "";
+            public int QuantidadeAtendimentos { get; set; }
+            public decimal TotalVendido { get; set; }
+            public decimal TotalComissao { get; set; }
+
+            /// <summary>Vendas de produto, mesmo quando não geram comissão.</summary>
+            public int ProdutosVendidos { get; set; }
+            public decimal ValorProdutos { get; set; }
+            public int ServicosRealizados { get; set; }
+
+            public decimal PercentualSobreVenda =>
+                TotalVendido == 0 ? 0 : Math.Round(TotalComissao / TotalVendido * 100, 1);
+        }
+
+        public class LinhaComissao
+        {
+            public int IdVenda { get; set; }
+            public DateTime DataVenda { get; set; }
+            public string Descricao { get; set; } = "";
+            public int Quantidade { get; set; }
+            public decimal ValorItem { get; set; }
+            public decimal Comissao { get; set; }
+            public bool CobertoPlano { get; set; }
+            public string? NomeCliente { get; set; }
+
+            // Preenchidos so por ListarItens
+            public string TipoItem { get; set; } = Models.TipoItem.Servico;
+            public int IdFuncionario { get; set; }
+            public string? NomeFuncionario { get; set; }
+
+            /// <summary>Já existe folha paga do profissional na competência da venda.</summary>
+            public bool Paga { get; set; }
+
+            /// <summary>Forma de pagamento da venda; PLANO quando o credito pagou.</summary>
+            public string? FormaPagamento { get; set; }
+
+            public bool EProduto => TipoItem == Models.TipoItem.Produto;
+
+            /// <summary>Comissão sobre o valor do item; nulo quando o item saiu sem valor (plano).</summary>
+            public decimal? Percentual => ValorItem > 0 ? Comissao / ValorItem : null;
+        }
+
+        /// <summary>
+        /// Total por profissional no período. Vendas canceladas ficam de fora.
+        /// </summary>
+        public List<ResumoProfissional> ResumoPorProfissional(DateTime de, DateTime ate)
+        {
+            var lista = new List<ResumoProfissional>();
+
+            using var conexao = _conexao.GetConnection();
+            using (var comando = new MySqlCommand(@"
+                SELECT f.id_fun, f.nome_fun,
+                       COUNT(DISTINCT v.id_vend) atendimentos,
+                       COALESCE(SUM(vi.valor_total), 0) vendido,
+                       COALESCE(SUM(vi.comissao * vi.quantidade), 0) comissao,
+                       COALESCE(SUM(CASE WHEN vi.tipo_item = 'PRODUTO' THEN vi.quantidade ELSE 0 END), 0) produtos,
+                       COALESCE(SUM(CASE WHEN vi.tipo_item = 'PRODUTO' THEN vi.valor_total ELSE 0 END), 0) valor_produtos,
+                       COALESCE(SUM(CASE WHEN vi.tipo_item <> 'PRODUTO' THEN vi.quantidade ELSE 0 END), 0) servicos
+                FROM venda v
+                JOIN venda_item vi ON vi.id_vend_fk = v.id_vend
+                JOIN funcionario f ON f.id_fun = COALESCE(vi.id_fun_fk, v.id_fun_fk)
+                WHERE v.data_vend >= @de AND v.data_vend < @ate
+                  AND v.status_vend <> 'CANCELADA'
+                GROUP BY f.id_fun, f.nome_fun
+                HAVING comissao > 0 OR atendimentos > 0
+                ORDER BY comissao DESC", conexao))
+            {
+                comando.Parameters.AddWithValue("@de", de);
+                comando.Parameters.AddWithValue("@ate", ate);
+
+                using var leitor = comando.ExecuteReader();
+                while (leitor.Read())
+                {
+                    lista.Add(new ResumoProfissional
+                    {
+                        IdFuncionario = leitor.GetInt32("id_fun"),
+                        NomeFuncionario = leitor.IsDBNull(leitor.GetOrdinal("nome_fun"))
+                            ? "(sem nome)" : leitor.GetString("nome_fun"),
+                        QuantidadeAtendimentos = leitor.GetInt32("atendimentos"),
+                        TotalVendido = leitor.GetDecimal("vendido"),
+                        TotalComissao = leitor.GetDecimal("comissao"),
+                        ProdutosVendidos = Convert.ToInt32(leitor.GetValue(leitor.GetOrdinal("produtos"))),
+                        ValorProdutos = leitor.GetDecimal("valor_produtos"),
+                        ServicosRealizados = Convert.ToInt32(leitor.GetValue(leitor.GetOrdinal("servicos")))
+                    });
+                }
+            }
+
+            return lista;
+        }
+
+        /// <summary>Detalhe item a item do que gerou a comissão.</summary>
+        public List<LinhaComissao> Detalhar(int idFuncionario, DateTime de, DateTime ate)
+        {
+            var lista = new List<LinhaComissao>();
+
+            using var conexao = _conexao.GetConnection();
+            using var comando = new MySqlCommand(@"
+                SELECT v.id_vend, v.data_vend, c.nome_cli,
+                       vi.descricao, vi.quantidade, vi.valor_total,
+                       (vi.comissao * vi.quantidade) comissao, vi.coberto_plano
+                FROM venda v
+                JOIN venda_item vi ON vi.id_vend_fk = v.id_vend
+                LEFT JOIN cliente c ON c.id_cli = v.id_cli_fk
+                WHERE COALESCE(vi.id_fun_fk, v.id_fun_fk) = @id
+                  AND v.data_vend >= @de AND v.data_vend < @ate
+                  AND v.status_vend <> 'CANCELADA'
+                  AND vi.comissao > 0
+                ORDER BY v.data_vend DESC, vi.id_vend_item", conexao);
+
+            comando.Parameters.AddWithValue("@id", idFuncionario);
+            comando.Parameters.AddWithValue("@de", de);
+            comando.Parameters.AddWithValue("@ate", ate);
+
+            using var leitor = comando.ExecuteReader();
+            var iCliente = leitor.GetOrdinal("nome_cli");
+
+            while (leitor.Read())
+            {
+                lista.Add(new LinhaComissao
+                {
+                    IdVenda = leitor.GetInt32("id_vend"),
+                    DataVenda = leitor.GetDateTime("data_vend"),
+                    Descricao = leitor.GetString("descricao"),
+                    Quantidade = leitor.GetInt32("quantidade"),
+                    ValorItem = leitor.GetDecimal("valor_total"),
+                    Comissao = leitor.GetDecimal("comissao"),
+                    CobertoPlano = leitor.GetBoolean("coberto_plano"),
+                    NomeCliente = leitor.IsDBNull(iCliente) ? null : leitor.GetString(iCliente)
+                });
+            }
+
+            return lista;
+        }
+
+        /// <summary>
+        /// Todos os itens que geraram comissao no periodo, de todos os
+        /// profissionais (ou de um so). A comissao conta como paga quando a
+        /// folha do profissional na competencia da venda ja foi liquidada.
+        /// </summary>
+        public List<LinhaComissao> ListarItens(DateTime de, DateTime ate, int? idFuncionario = null)
+        {
+            var lista = new List<LinhaComissao>();
+
+            using var conexao = _conexao.GetConnection();
+            using var comando = new MySqlCommand($@"
+                SELECT v.id_vend, v.data_vend, v.forma_pagamento_vend, c.nome_cli, f.id_fun, f.nome_fun,
+                       vi.tipo_item, vi.descricao, vi.quantidade, vi.valor_total,
+                       (vi.comissao * vi.quantidade) comissao, vi.coberto_plano,
+                       EXISTS (SELECT 1 FROM folha_pagamento fp
+                                WHERE fp.id_fun_fk = f.id_fun
+                                  AND fp.competencia = DATE_FORMAT(v.data_vend, '%Y-%m')) paga
+                FROM venda v
+                JOIN venda_item vi ON vi.id_vend_fk = v.id_vend
+                JOIN funcionario f ON f.id_fun = COALESCE(vi.id_fun_fk, v.id_fun_fk)
+                LEFT JOIN cliente c ON c.id_cli = v.id_cli_fk
+                WHERE v.data_vend >= @de AND v.data_vend < @ate
+                  AND v.status_vend <> 'CANCELADA'
+                  AND vi.comissao > 0
+                  {(idFuncionario.HasValue ? "AND f.id_fun = @id" : "")}
+                ORDER BY v.data_vend DESC, vi.id_vend_item", conexao);
+
+            comando.Parameters.AddWithValue("@de", de);
+            comando.Parameters.AddWithValue("@ate", ate);
+            if (idFuncionario.HasValue) comando.Parameters.AddWithValue("@id", idFuncionario.Value);
+
+            using var leitor = comando.ExecuteReader();
+            var iCliente = leitor.GetOrdinal("nome_cli");
+            var iNome = leitor.GetOrdinal("nome_fun");
+
+            while (leitor.Read())
+            {
+                lista.Add(new LinhaComissao
+                {
+                    IdVenda = leitor.GetInt32("id_vend"),
+                    DataVenda = leitor.GetDateTime("data_vend"),
+                    TipoItem = leitor.GetString("tipo_item"),
+                    Descricao = leitor.GetString("descricao"),
+                    Quantidade = leitor.GetInt32("quantidade"),
+                    ValorItem = leitor.GetDecimal("valor_total"),
+                    Comissao = leitor.GetDecimal("comissao"),
+                    CobertoPlano = leitor.GetBoolean("coberto_plano"),
+                    NomeCliente = leitor.IsDBNull(iCliente) ? null : leitor.GetString(iCliente),
+                    IdFuncionario = leitor.GetInt32("id_fun"),
+                    NomeFuncionario = leitor.IsDBNull(iNome) ? "(sem nome)" : leitor.GetString(iNome),
+                    Paga = Convert.ToInt32(leitor.GetValue(leitor.GetOrdinal("paga"))) == 1,
+                    FormaPagamento = DAOHelper.IsNull(leitor, "forma_pagamento_vend")
+                        ? null : leitor.GetString("forma_pagamento_vend")
+                });
+            }
+
+            return lista;
+        }
+    }
+}

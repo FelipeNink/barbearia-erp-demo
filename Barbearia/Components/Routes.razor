@@ -1,0 +1,32 @@
+@* O AuthorizeRouteView e o que faz a regra de acesso valer tambem na
+   navegacao interna do Blazor.
+
+   O middleware do servidor so roda na requisicao HTTP; depois que o
+   circuito liga, trocar de pagina acontece dentro dele e nenhum
+   middleware e consultado. Sem isto, bastaria navegar pelo menu para
+   entrar numa tela sem permissao. *@
+
+<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="routeData">
+        @{
+            var nomePagina = routeData.PageType?.Name;
+
+            // Telas de acesso nao levam a lateral nem o cabecalho. A de
+            // confirmar horario e do cliente, aberta pelo link do lembrete,
+            // e a de agendar tambem, aberta pelo link publico.
+            var semMoldura = nomePagina is "Login" or "Logout" or "Error" or "TrocarSenha" or "ConfirmarHorario" or "AgendarOnline" or "AvaliarAtendimento";
+
+            var tipoLayout = semMoldura
+                ? typeof(Layout.BlankLayout)
+                : typeof(Layout.MainLayout);
+        }
+
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="tipoLayout">
+            <NotAuthorized>
+                <AcessoNegado />
+            </NotAuthorized>
+        </AuthorizeRouteView>
+
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+</Router>

@@ -1,0 +1,13 @@
+@page "/servico/novo"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = Politicas.CriarServico)]
+
+@using Barbearia.Models
+
+<PageTitle>Novo serviço</PageTitle>
+
+<FormServico Modelo="servico" Novo="true" />
+
+@code {
+    private readonly Servico servico = new() { DuracaoServico = 30 };
+}

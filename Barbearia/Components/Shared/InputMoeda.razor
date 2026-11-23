@@ -1,0 +1,34 @@
+@* Valor em reais com mascara "1.234,56". O ui.js formata enquanto a
+   pessoa digita; aqui o texto vira decimal ao sair do campo.
+   Percentual: sem a mascara de centavos, digita-se "30" ou "12,5" direto. *@
+
+@using System.Globalization
+
+<input id="@Id" class="form-control al-dir-campo" inputmode="@(Percentual ? "decimal" : "numeric")"
+       data-mascara="@(Percentual ? null : "moeda")"
+       placeholder="@(Percentual ? "0" : "0,00")" @attributes="Extras" value="@Texto" @onchange="AoMudar" />
+
+@code {
+    private static readonly CultureInfo Br = new("pt-BR");
+
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public decimal Valor { get; set; }
+    [Parameter] public EventCallback<decimal> ValorChanged { get; set; }
+    [Parameter] public bool Percentual { get; set; }
+
+    // placeholder, disabled, class... do chamador; vem depois e prevalece.
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? Extras { get; set; }
+
+    private string Texto => Valor == 0 ? "" : Valor.ToString(Percentual ? "0.##" : "N2", Br);
+
+    private async Task AoMudar(ChangeEventArgs e)
+    {
+        var texto = (e.Value?.ToString() ?? "").Replace("R$", "").Trim();
+
+        // Vazio volta a zero; texto que nao e numero mantem o valor anterior.
+        if (texto.Length == 0)
+            await ValorChanged.InvokeAsync(0m);
+        else if (decimal.TryParse(texto, NumberStyles.Number, Br, out var valor))
+            await ValorChanged.InvokeAsync(Math.Round(valor, 2));
+    }
+}

@@ -1,0 +1,13 @@
+@page "/compra/novo"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = Politicas.CriarCompra)]
+
+@using Barbearia.Models
+
+<PageTitle>Nova compra</PageTitle>
+
+<FormCompra Modelo="compra" Novo="true" />
+
+@code {
+    private readonly Compra compra = new();
+}

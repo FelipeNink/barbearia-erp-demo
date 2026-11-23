@@ -1,0 +1,564 @@
+@page "/"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = Politicas.Painel)]
+@implements IDisposable
+
+@using Barbearia.Configs
+@using Barbearia.Models
+@using Barbearia.Services
+@using System.Text.Json
+@inject PainelDAO painelDAO
+@inject CaixaDAO caixaDAO
+@inject EstoqueDAO estoqueDAO
+@inject AssinaturaDAO assinaturaDAO
+@inject AgendamentoDAO agendamentoDAO
+@inject AvaliacaoDAO avaliacaoDAO
+@inject HorarioDAO horarioDAO
+@inject Autorizacao permissao
+
+
+<div class="cabecalho-painel">
+    <div>
+        @* Data e base de comparacao aparecem uma vez so, aqui. Antes cada
+           indicador repetia "vs. periodo anterior". *@
+        <span class="linha-titulo">@DataPorExtenso · @RotuloPeriodo</span>
+
+        @* Aberta/fechada, discreto ao lado da data. Clicar abre o ajuste
+           do dia para quem pode mexer no horario. *@
+        @if (situacao != null)
+        {
+            <span class="expediente">
+                @if (podeVerHorario)
+                {
+                    <button type="button" class="selo-expediente @(situacao.Aberta ? "aberta" : "fechada")"
+                            aria-expanded="@menuExpediente" @onclick="() => menuExpediente = !menuExpediente">
+                        <i></i>@situacao.Texto
+                    </button>
+                }
+                else
+                {
+                    <span class="selo-expediente @(situacao.Aberta ? "aberta" : "fechada")"><i></i>@situacao.Texto</span>
+                }
+
+                @if (menuExpediente)
+                {
+                    <span class="menu-expediente">
+                        @if (podeEditarHorario)
+                        {
+                            @if (situacao.Aberta)
+                            {
+                                <button type="button" @onclick="() => AjustarHoje(false)">Fechar por hoje</button>
+                            }
+                            else
+                            {
+                                <button type="button" @onclick="() => AjustarHoje(true)">Abrir agora</button>
+                            }
+                            @if (excecaoHoje != null)
+                            {
+                                <button type="button" @onclick="() => AjustarHoje(null)">Voltar ao horário normal</button>
+                            }
+                        }
+                        <a href="/horario">Horários da semana</a>
+                    </span>
+                }
+            </span>
+        }
+        <h1 class="titulo-painel">Painel</h1>
+    </div>
+
+    @* ---------- filtro de periodo ---------- *@
+    <div class="atalhos-periodo">
+        <button type="button" class="@(periodo == 0 ? "ativo" : "")" @onclick="() => TrocarPeriodo(0)">Hoje</button>
+        <button type="button" class="@(periodo == 7 ? "ativo" : "")" @onclick="() => TrocarPeriodo(7)">7 dias</button>
+        <button type="button" class="@(periodo == 30 ? "ativo" : "")" @onclick="() => TrocarPeriodo(30)">30 dias</button>
+        <button type="button" class="@(periodo == -1 ? "ativo" : "")" @onclick="() => TrocarPeriodo(-1)">Este mês</button>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(erro))
+{
+    <div class="alert alert-danger">@erro</div>
+}
+
+@* ---------- situação do caixa ---------- *@
+<div class="faixa-caixa comanda @(caixaAberto != null ? "aberto" : "fechado")">
+    @if (caixaAberto != null)
+    {
+        <div>
+            <strong class="status aberto-caixa">
+                <i></i>Caixa #@caixaAberto.IdCaixa aberto
+            </strong>
+            <span>desde @caixaAberto.DataAbertura.ToString("dd/MM 'às' HH:mm")</span>
+        </div>
+
+        @* O que tem na gaveta e valor, e so quem pode ver valores ve. *@
+        @if (podeVerValores)
+        {
+            <div class="gaveta-agora">
+                <span>Na gaveta</span>
+                <strong>@caixaAberto.Resumo.SaldoEsperadoGaveta(caixaAberto.ValorAbertura).ToString("C")</strong>
+            </div>
+        }
+
+        @if (podeVerCaixa)
+        {
+            <a href="/caixa" class="link-caixa">Ver caixa</a>
+        }
+    }
+    else
+    {
+        <div>
+            <strong>Nenhum caixa aberto</strong>
+            <span>Abra o caixa para registrar vendas.</span>
+        </div>
+
+        @if (podeVerCaixa)
+        {
+            <a href="/caixa" class="link-caixa">Abrir caixa</a>
+        }
+    }
+</div>
+
+
+@* ---------- avisos ----------
+   Reposicao e assinaturas, lado a lado e numa linha cada: o aviso so
+   diz o que precisa de atencao e leva para a tela que resolve. A lista
+   completa fica no title, ao passar o mouse.
+
+   Reposicao: so quando ha o que repor, e so para quem pode abrir o
+   estoque. Assinaturas: mesma regra; vencida e a ativa com o prazo ja
+   passado, vencendo e a que vence nos proximos dias. *@
+@if (reposicao.Count > 0 || assinaturasAtencao.Count > 0 || canceladosCliente.Count > 0 || marcadosOnline.Count > 0
+     || notasBaixas.Count > 0)
+{
+    <div class="avisos-painel">
+        @* Nota baixa nos ultimos 3 dias: o dono liga para o cliente antes
+           de o problema virar avaliacao ruim no Google. *@
+        @if (notasBaixas.Count > 0)
+        {
+            var lista = string.Join(" · ", notasBaixas.Select(a =>
+                $"{a.NomeCliente}: {a.Nota}★ para {WhatsApp.PrimeiroNome(a.NomeFuncionario)}"
+                + (string.IsNullOrWhiteSpace(a.Comentario) ? "" : $" — “{a.Comentario}”")));
+            <a href="/relatorios?r=avaliacoes" class="aviso-compacto" title="@lista">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" />
+                </svg>
+                <strong>@TextoNotasBaixas</strong>
+                <span>@lista</span>
+            </a>
+        }
+
+        @* Marcou sozinho pelo link publico nas ultimas 24 horas: ja esta na
+           agenda, o aviso e para a equipe ver quem chegou por ali. *@
+        @if (marcadosOnline.Count > 0)
+        {
+            var lista = string.Join(" · ", marcadosOnline.Select(a => $"{a.NomeCliente}: {WhatsApp.Quando(a.DataHora)}"));
+            <a href="/agendamentos" class="aviso-compacto" title="@lista">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM16 2v4M8 2v4M3 10h18M9 15.5l2 2 4-4" />
+                </svg>
+                <strong>@TextoOnline</strong>
+                <span>@lista</span>
+            </a>
+        }
+
+        @* Cancelou pelo link do lembrete: o horario ja ficou livre, e a
+           equipe precisa saber para encaixar outro cliente. *@
+        @if (canceladosCliente.Count > 0)
+        {
+            var lista = string.Join(" · ", canceladosCliente.Select(a => $"{a.NomeCliente}: {WhatsApp.Quando(a.DataHora)}"));
+            <a href="/agendamentos" class="aviso-compacto" title="@lista">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM16 2v4M8 2v4M3 10h18M10 14l4 4M14 14l-4 4" />
+                </svg>
+                <strong>@TextoCancelados</strong>
+                <span>@lista</span>
+            </a>
+        }
+
+        @if (reposicao.Count > 0)
+        {
+            var lista = string.Join(" · ", reposicao.Select(p => $"{p.Nome}: {p.Saldo}"));
+            <a href="/estoque" class="aviso-compacto" title="@lista">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 9h18v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM3 9l2-5h14l2 5M12 12v5M9.5 14.5h5" />
+                </svg>
+                <strong>@reposicao.Count produto(s) pedindo reposição</strong>
+                <span>@lista</span>
+            </a>
+        }
+
+        @if (assinaturasAtencao.Count > 0)
+        {
+            var lista = string.Join(" · ", assinaturasAtencao.Select(a => $"{a.NomeCliente}: {a.DataFim:dd/MM}"));
+            <a href="/assinaturas" class="aviso-compacto" title="@lista">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M4 5h16v14H4zM4 10h16M8 15h3" />
+                </svg>
+                <strong>@TextoAssinaturas</strong>
+                <span>@lista</span>
+            </a>
+        }
+    </div>
+}
+
+@* ---------- indicadores ----------
+   Faturamento, despesa, comissao e lucro so para quem tem "Ver valores".
+   Esconder apenas o menu nao bastaria: o painel e justamente onde os
+   numeros do negocio aparecem todos juntos. *@
+@if (podeVerValores)
+{
+    <div class="indicadores">
+        <div class="indicador receita">
+            <span class="rotulo">Receita</span>
+            <strong class="valor">@resumo.Receita.ToString("C")</strong>
+            <span class="detalhe">@resumo.QuantidadeVendas venda(s) · ticket @resumo.TicketMedio.ToString("C")</span>
+        </div>
+        <div class="indicador despesa">
+            <span class="rotulo">Despesas</span>
+            <strong class="valor">@resumo.Despesas.ToString("C")</strong>
+            <span class="detalhe">
+                @if (permissao.PodeVer("despesas"))
+                {
+                    <a href="/despesas" class="link-texto">ver lançamentos</a>
+                }
+            </span>
+        </div>
+        <div class="indicador comissao">
+            <span class="rotulo">Comissões</span>
+            <strong class="valor">@resumo.Comissoes.ToString("C")</strong>
+            <span class="detalhe">a pagar aos profissionais</span>
+        </div>
+        <div class="indicador @(resumo.Lucro >= 0 ? "lucro" : "prejuizo")">
+            <span class="rotulo">@(resumo.Lucro >= 0 ? "Lucro" : "Prejuízo")</span>
+            <strong class="valor">@resumo.Lucro.ToString("C")</strong>
+            <span class="detalhe">receita − despesas − comissões</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="indicadores-ocultos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9.9 5.2A10.6 10.6 0 0 1 12 5c6.4 0 10 7 10 7a18 18 0 0 1-3.2 4.2M6.6 6.6A18 18 0 0 0 2 12s3.6 7 10 7a10.5 10.5 0 0 0 5.4-1.4" />
+            <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18" />
+        </svg>
+        Os valores do período ficam visíveis para quem tem a permissão
+        <strong>Ver valores</strong> no Painel.
+    </div>
+}
+
+@* ---------- gráficos ----------
+   Mais baixos que antes, para dividir o painel com a agenda. Os mesmos
+   dois tambem aparecem em Relatorios, no Faturamento. *@
+@if (podeVerValores)
+{
+    <div class="painel">
+        <section class="cartao cartao-barras">
+            <header class="cartao-topo">
+                <h2>Receita e despesas por mês</h2>
+                <span class="cartao-sub">Últimos 12 meses</span>
+            </header>
+            <div class="area-grafico">
+                <canvas id="barChart"></canvas>
+            </div>
+        </section>
+
+        <section class="cartao cartao-pizza">
+            <header class="cartao-topo">
+                <h2>Formas de pagamento</h2>
+                <span class="cartao-sub">@RotuloPeriodo</span>
+            </header>
+            <div class="area-grafico">
+                <canvas id="pieChart"></canvas>
+            </div>
+        </section>
+    </div>
+}
+
+@if (permissao.PodeVer("agendamentos"))
+{
+    <CalendarioAgenda />
+}
+
+@if (permissao.PodeVer("clientes"))
+{
+    <CartaoAniversariantes />
+}
+
+@* Os dados vão para o JS por um elemento oculto, lido pelo dashboard.js.
+   Sem permissao de ver valores o elemento nem existe: esconder o grafico
+   e deixar os numeros no HTML nao esconderia nada. *@
+@if (podeVerValores)
+{
+    <script id="dados-painel" type="application/json">@((MarkupString)dadosJson)</script>
+}
+
+@code {
+    private PainelDAO.ResumoPainel resumo = new();
+    private Caixa? caixaAberto;
+    private string dadosJson = "{}";
+    private string? erro;
+
+    /// <summary>0 = hoje, 7/30 = últimos dias, -1 = mês corrente.</summary>
+    private int periodo = 30;
+
+    private (DateTime De, DateTime Ate) Intervalo
+    {
+        get
+        {
+            var hoje = DateTime.Today;
+            return periodo switch
+            {
+                0 => (hoje, hoje.AddDays(1)),
+                -1 => (new DateTime(hoje.Year, hoje.Month, 1), hoje.AddDays(1)),
+                _ => (hoje.AddDays(-periodo), hoje.AddDays(1))
+            };
+        }
+    }
+
+    private string RotuloPeriodo => periodo switch
+    {
+        0 => "Hoje",
+        -1 => "Este mês",
+        _ => $"Últimos {periodo} dias"
+    };
+
+    /// <summary>
+    /// "Quinta-feira, 15 de outubro". Fica na linha acima do titulo, que
+    /// e o unico lugar onde data e periodo aparecem.
+    /// </summary>
+    private static string DataPorExtenso
+    {
+        get
+        {
+            var cultura = new System.Globalization.CultureInfo("pt-BR");
+            var hoje = DateTime.Today;
+            var dia = cultura.DateTimeFormat.GetDayName(hoje.DayOfWeek);
+
+            return char.ToUpper(dia[0], cultura) + dia[1..]
+                 + hoje.ToString(", d 'de' MMMM", cultura);
+        }
+    }
+
+    private bool podeVerValores;
+    private bool podeVerCaixa;
+    private List<SaldoEstoque> reposicao = new();
+
+    /// <summary>Dias a frente em que uma assinatura ativa ja conta como "vencendo".</summary>
+    private const int DiasAvisoAssinatura = 7;
+
+    /// <summary>Cancelados pelo cliente, pelo link do lembrete, nas ultimas 24 horas.</summary>
+    private List<Agendamento> canceladosCliente = new();
+
+    /// <summary>Avaliacoes de 1 a 3 estrelas nos ultimos 3 dias.</summary>
+    private List<Avaliacao> notasBaixas = new();
+
+    private string TextoNotasBaixas =>
+        notasBaixas.Count == 1
+            ? $"{WhatsApp.PrimeiroNome(notasBaixas[0].NomeCliente)} deu {notasBaixas[0].Nota}★ ao atendimento"
+            : $"{notasBaixas.Count} avaliações baixas nos últimos dias";
+
+    /// <summary>Marcados pelo proprio cliente no link publico nas ultimas 24 horas.</summary>
+    private List<Agendamento> marcadosOnline = new();
+
+    private string TextoOnline =>
+        marcadosOnline.Count == 1
+            ? $"{WhatsApp.PrimeiroNome(marcadosOnline[0].NomeCliente)} marcou pelo link: {marcadosOnline[0].DataHora:dd/MM 'às' HH:mm}"
+            : $"{marcadosOnline.Count} horários marcados pelo link";
+
+    private string TextoCancelados =>
+        canceladosCliente.Count == 1
+            ? $"{WhatsApp.PrimeiroNome(canceladosCliente[0].NomeCliente)} cancelou o horário de {canceladosCliente[0].DataHora:dd/MM 'às' HH:mm}"
+            : $"{canceladosCliente.Count} clientes cancelaram pelo lembrete";
+
+    /// <summary>Ativas vencidas ou vencendo, da mais antiga para a mais nova.</summary>
+    private List<Assinatura> assinaturasAtencao = new();
+
+    private string TextoAssinaturas
+    {
+        get
+        {
+            var vencidas = assinaturasAtencao.Count(a => a.Vencida);
+            var vencendo = assinaturasAtencao.Count - vencidas;
+
+            if (vencidas > 0 && vencendo > 0)
+                return $"{vencidas} assinatura(s) vencida(s) e {vencendo} vencendo em {DiasAvisoAssinatura} dias";
+
+            return vencidas > 0
+                ? $"{vencidas} assinatura(s) vencida(s)"
+                : $"{vencendo} assinatura(s) vencendo em {DiasAvisoAssinatura} dias";
+        }
+    }
+
+    private SituacaoExpediente? situacao;
+    private bool? excecaoHoje;
+    private bool menuExpediente;
+    private bool podeVerHorario;
+    private bool podeEditarHorario;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await permissao.CarregarAsync();
+
+        podeVerValores = permissao.Pode("painel", Acao.VerValores);
+        podeVerCaixa = permissao.PodeVer("caixa");
+        podeVerHorario = permissao.PodeVer("horario");
+        podeEditarHorario = permissao.Pode("horario", Acao.Editar);
+
+        if (permissao.PodeVer("estoque"))
+        {
+            try
+            {
+                reposicao = estoqueDAO.PedindoAtencao(10);
+            }
+            catch
+            {
+                // Aviso de reposicao nao pode derrubar o painel inteiro.
+            }
+        }
+
+        if (permissao.PodeVer("agendamentos"))
+        {
+            try
+            {
+                canceladosCliente = agendamentoDAO.CanceladosPeloCliente(DateTime.Now.AddHours(-24));
+                marcadosOnline = agendamentoDAO.CriadosOnline(DateTime.Now.AddHours(-24));
+            }
+            catch
+            {
+                // Mesmo caso da reposicao: o aviso e acessorio.
+            }
+        }
+
+        if (permissao.PodeVer("relatorios"))
+        {
+            try
+            {
+                notasBaixas = avaliacaoDAO.Respondidas(
+                    DateTime.Today.AddDays(-2), DateTime.Now.AddMinutes(1), notaAte: NotaAvaliacao.Baixa);
+            }
+            catch
+            {
+                // Mesmo caso da reposicao: o aviso e acessorio.
+            }
+        }
+
+        if (permissao.PodeVer("assinaturas"))
+        {
+            try
+            {
+                var limite = DateTime.Today.AddDays(DiasAvisoAssinatura);
+                assinaturasAtencao = assinaturaDAO.ListarTodas()
+                    .Where(a => a.Status == StatusAssinatura.Ativa
+                                && a.DataFim.HasValue && a.DataFim.Value.Date <= limite)
+                    .ToList();
+            }
+            catch
+            {
+                // Mesmo caso da reposicao: o aviso e acessorio.
+            }
+        }
+
+        Carregar();
+    }
+
+    /// <summary>
+    /// Relogio que repoe os numeros enquanto a tela fica aberta.
+    ///
+    /// Carregar() so rodava no OnInitialized: com o painel aberto numa TV
+    /// do salao, ou em outra aba enquanto alguem lanca uma venda, os
+    /// valores congelavam ate recarregar a pagina.
+    /// </summary>
+    private PeriodicTimer? relogio;
+
+    protected override async Task OnAfterRenderAsync(bool primeiraVez)
+    {
+        if (!primeiraVez) return;
+
+        relogio = new PeriodicTimer(TimeSpan.FromSeconds(60));
+
+        // Sem await no laco: ele vive enquanto a tela existir e termina
+        // quando o Dispose descarta o relogio.
+        while (await relogio.WaitForNextTickAsync())
+        {
+            Carregar();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public void Dispose() => relogio?.Dispose();
+
+    private void TrocarPeriodo(int novo)
+    {
+        periodo = novo;
+        Carregar();
+    }
+
+    private void Carregar()
+    {
+        try
+        {
+            erro = null;
+
+            var (de, ate) = Intervalo;
+            resumo = painelDAO.Resumo(de, ate);
+            caixaAberto = caixaDAO.BuscarAberto();
+
+            var serie = painelDAO.SerieMensal();
+            var formas = painelDAO.PorFormaPagamento(de, ate);
+
+            dadosJson = JsonSerializer.Serialize(new
+            {
+                meses = serie.Select(s => s.Mes).ToArray(),
+                receitas = serie.Select(s => s.Receita).ToArray(),
+                despesas = serie.Select(s => s.Despesa).ToArray(),
+                formasRotulos = formas.Keys.Select(FormaPagamento.Rotulo).ToArray(),
+                formasValores = formas.Values.ToArray()
+            });
+        }
+        catch (Exception ex)
+        {
+            erro = "Erro ao carregar o painel: " + ex.Message;
+            dadosJson = "{}";
+        }
+
+        CarregarExpediente();
+    }
+
+    private void CarregarExpediente()
+    {
+        try
+        {
+            excecaoHoje = horarioDAO.Excecao(DateTime.Today);
+            situacao = Expediente.Situacao(horarioDAO.Listar(), excecaoHoje, DateTime.Now);
+        }
+        catch
+        {
+            // O selo e acessorio: sem ele, o resto do painel continua.
+            situacao = null;
+        }
+    }
+
+    /// <summary>Abre ou fecha so hoje; null volta a seguir a grade.</summary>
+    private async Task AjustarHoje(bool? aberto)
+    {
+        try
+        {
+            await permissao.ExigirAsync("horario", Acao.Editar);
+            horarioDAO.DefinirExcecao(DateTime.Today, aberto);
+            menuExpediente = false;
+            CarregarExpediente();
+        }
+        catch (Exception ex)
+        {
+            erro = "Erro ao ajustar o horário: " + ex.Message;
+        }
+    }
+}

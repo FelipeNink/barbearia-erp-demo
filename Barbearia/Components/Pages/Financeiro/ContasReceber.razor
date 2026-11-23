@@ -1,0 +1,309 @@
+@page "/contas-receber"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = Politicas.ContasReceber)]
+
+@using Barbearia.Configs
+@using Barbearia.Models
+@using Barbearia.Services
+@inject ContaReceberDAO contaDAO
+@inject CaixaDAO caixaDAO
+@inject Autorizacao permissao
+@inject AuthenticationService auth
+
+
+<h1 class="titulo-listagem">Contas a receber</h1>
+
+@if (!string.IsNullOrEmpty(erro))
+{
+    <div class="alert alert-danger">@erro</div>
+}
+@if (!string.IsNullOrEmpty(aviso))
+{
+    <div class="alert alert-success">@aviso</div>
+}
+
+<div class="resumo">
+    <div class="cartao-resumo">
+        <span class="rotulo">Total a receber</span>
+        <strong class="valor">@contas.Sum(c => c.Saldo).ToString("C")</strong>
+    </div>
+    <div class="cartao-resumo prejuizo">
+        <span class="rotulo">Em atraso</span>
+        <strong class="valor">@contas.Where(c => c.Atrasada).Sum(c => c.Saldo).ToString("C")</strong>
+    </div>
+    <div class="cartao-resumo">
+        <span class="rotulo">Clientes devendo</span>
+        <strong class="valor">@Devedores.Count</strong>
+    </div>
+</div>
+
+<div class="tabela">
+<table class="table">
+    <thead>
+        <tr>
+            <th>Cliente</th>
+            <th class="opcional">Telefone</th>
+            <th class="opcional">Desde</th>
+            <th>Combinado</th>
+            <th class="col-num">Deve</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (Devedores.Count == 0)
+        {
+            <tr><td colspan="6" class="vazio">Nenhum fiado em aberto.</td></tr>
+        }
+        @foreach (var d in Devedores)
+        {
+            <tr>
+                <td>
+                    <button type="button" class="link-nome" @onclick="() => Alternar(d.IdCliente)">
+                        <span class="nome-cliente">@d.Nome</span>
+                        <span class="suave">· @d.Contas.Count venda(s)</span>
+                    </button>
+                </td>
+                <td class="opcional">@(d.Telefone ?? "—")</td>
+                <td class="opcional"><span class="data">@d.Desde.ToString("dd/MM/yyyy")</span></td>
+                <td>
+                    @if (d.Atrasado)
+                    {
+                        <span class="status erro"><i></i>Atrasado</span>
+                    }
+                    else if (d.ProximoVencimento.HasValue)
+                    {
+                        <span class="data">@d.ProximoVencimento.Value.ToString("dd/MM/yyyy")</span>
+                    }
+                    else
+                    {
+                        <span class="suave">sem data</span>
+                    }
+                </td>
+                <td class="col-num"><strong>@d.Saldo.ToString("C")</strong></td>
+                <td>
+                    <div class="acoes">
+                        <BotaoWhatsApp Telefone="@d.Telefone" Mensagem="@MensagemCobranca(d)" Titulo="Lembrar o cliente no WhatsApp" />
+                        @if (podeReceber)
+                        {
+                            <button type="button" class="btn-acao com-texto" @onclick="() => AbrirRecebimento(d)">Receber</button>
+                        }
+                    </div>
+                </td>
+            </tr>
+            @if (abertos.Contains(d.IdCliente))
+            {
+                @foreach (var c in d.Contas)
+                {
+                    <tr class="detalhe-conta">
+                        <td colspan="2"><span class="suave">Venda #@c.IdVenda · @c.Descricao</span></td>
+                        <td class="opcional"><span class="data">@c.DataVenda.ToString("dd/MM/yyyy")</span></td>
+                        <td>@(c.Vencimento?.ToString("dd/MM/yyyy") ?? "—")</td>
+                        <td class="col-num">
+                            @c.Saldo.ToString("C")
+                            @if (c.Recebido > 0)
+                            {
+                                <span class="suave bloco">de @c.Valor.ToString("C")</span>
+                            }
+                        </td>
+                        <td></td>
+                    </tr>
+                }
+            }
+        }
+    </tbody>
+</table>
+</div>
+
+<h2 class="subtitulo-secao">Recebidos nos últimos 30 dias</h2>
+
+<div class="tabela">
+<table class="table">
+    <thead>
+        <tr>
+            <th>Data</th>
+            <th>Cliente</th>
+            <th class="opcional">Venda</th>
+            <th>Forma</th>
+            <th class="col-num">Valor</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (recebimentos.Count == 0)
+        {
+            <tr><td colspan="6" class="vazio">Nenhum recebimento no período.</td></tr>
+        }
+        @foreach (var r in recebimentos)
+        {
+            <tr>
+                <td><span class="data">@r.Data.ToString("dd/MM/yyyy HH:mm")</span></td>
+                <td>@r.NomeCliente</td>
+                <td class="opcional">#@r.IdVenda</td>
+                <td>@FormaPagamento.Rotulo(r.Forma)</td>
+                <td class="col-num">@r.Valor.ToString("C")</td>
+                <td>
+                    @if (podeEstornar && r.CaixaAberto)
+                    {
+                        <button type="button" class="btn-acao perigo com-texto" @onclick="() => estornando = r">Estornar</button>
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+</div>
+
+<Janela Visivel="@(recebendo != null)" Titulo="@($"Receber de {recebendo?.Nome}")" Largura="440"
+        Erro="@erroRecebimento" OnFechar="FecharJanelas">
+    <ChildContent>
+        @if (recebendo != null)
+        {
+            @if (caixaAberto == null)
+            {
+                <div class="alert alert-warning">Abra o caixa para receber: o dinheiro entra nele.</div>
+            }
+            <p class="suave">Deve @recebendo.Saldo.ToString("C"). O valor abate das vendas mais antigas primeiro.</p>
+            <label class="form-label" for="receber-valor">Valor recebido</label>
+            <InputMoeda Id="receber-valor" @bind-Valor="valorRecebido" />
+            <label class="form-label mt-3">Forma de pagamento</label>
+            <Seletor TItem="Opcao" TValor="string" Itens="OpcoesForma"
+                     @bind-Valor="formaRecebimento" TextoDe="o => o.Rotulo" ValorDe="o => o.Valor" PontoDe="o => o.Cor" />
+        }
+    </ChildContent>
+    <Rodape>
+        <button type="button" class="btn btn-outline-secondary" @onclick="FecharJanelas">Cancelar</button>
+        <button type="button" class="btn btn-primary" disabled="@(caixaAberto == null || valorRecebido <= 0)" @onclick="ConfirmarRecebimento">
+            Receber @valorRecebido.ToString("C")
+        </button>
+    </Rodape>
+</Janela>
+
+<ConfirmarModal Visivel="@(estornando != null)" Titulo="Estornar recebimento" TextoConfirmar="Estornar" Erro="@erroRecebimento"
+                OnConfirmar="ConfirmarEstorno" OnCancelar="FecharJanelas">
+    Desfazer o recebimento de @estornando?.Valor.ToString("C") de @estornando?.NomeCliente?
+    O valor volta a ficar em aberto.
+</ConfirmarModal>
+
+@code {
+    /// <summary>As contas em aberto de um cliente, somadas.</summary>
+    private record Devedor(int IdCliente, string Nome, string? Telefone, List<ContaReceber> Contas)
+    {
+        public decimal Saldo => Contas.Sum(c => c.Saldo);
+        public DateTime Desde => Contas.Min(c => c.DataVenda);
+        public bool Atrasado => Contas.Any(c => c.Atrasada);
+        public DateTime? ProximoVencimento => Contas.Where(c => c.Vencimento.HasValue).Min(c => c.Vencimento);
+    }
+
+    private List<ContaReceber> contas = new();
+    private List<RecebimentoConta> recebimentos = new();
+    private readonly HashSet<int> abertos = new();
+    private Caixa? caixaAberto;
+
+    private bool podeReceber;
+    private bool podeEstornar;
+
+    private Devedor? recebendo;
+    private decimal valorRecebido;
+    private string formaRecebimento = FormaPagamento.Dinheiro;
+    private RecebimentoConta? estornando;
+
+    private string? erro;
+    private string? aviso;
+    private string? erroRecebimento;
+
+    private List<Opcao> OpcoesForma =>
+        FormaPagamento.Todas.Select(f => new Opcao(f.Valor, f.Rotulo, "var(--ok)")).ToList();
+
+    /// <summary>Atrasados primeiro, depois quem deve mais.</summary>
+    private List<Devedor> Devedores =>
+        contas.GroupBy(c => c.IdCliente)
+              .Select(g => new Devedor(g.Key, g.First().NomeCliente ?? "(sem nome)", g.First().TelefoneCliente, g.ToList()))
+              .OrderByDescending(d => d.Atrasado)
+              .ThenByDescending(d => d.Saldo)
+              .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await auth.PrepararAsync();
+        await permissao.CarregarAsync();
+        podeReceber = permissao.Pode("receber", Acao.Liquidar);
+        podeEstornar = permissao.Pode("receber", Acao.Estornar);
+        Carregar();
+    }
+
+    private void Carregar()
+    {
+        try
+        {
+            erro = null;
+            contas = contaDAO.ListarAbertas();
+            recebimentos = contaDAO.Recebimentos(DateTime.Today.AddDays(-30), DateTime.Today);
+            caixaAberto = caixaDAO.BuscarAberto();
+        }
+        catch (Exception ex)
+        {
+            erro = "Erro ao carregar as contas: " + ex.Message;
+        }
+    }
+
+    private void Alternar(int idCliente)
+    {
+        if (!abertos.Remove(idCliente)) abertos.Add(idCliente);
+    }
+
+    private static string MensagemCobranca(Devedor d) =>
+        $"Olá, {CorProfissional.PrimeiroNome(d.Nome)}! Tudo bem? Passando para lembrar do valor de "
+        + $"{d.Saldo:C} em aberto aqui na barbearia. Quando puder, é só acertar no próximo atendimento ou por PIX. Obrigado!";
+
+    private void AbrirRecebimento(Devedor d)
+    {
+        aviso = null;
+        erroRecebimento = null;
+        recebendo = d;
+        valorRecebido = d.Saldo;
+        formaRecebimento = FormaPagamento.Dinheiro;
+        caixaAberto = caixaDAO.BuscarAberto();
+    }
+
+    private void ConfirmarRecebimento()
+    {
+        if (recebendo == null || caixaAberto == null) return;
+
+        try
+        {
+            contaDAO.Receber(recebendo.IdCliente, valorRecebido, formaRecebimento,
+                caixaAberto.IdCaixa, auth.GetUsuarioNome());
+            aviso = $"Recebido {valorRecebido:C} de {recebendo.Nome}.";
+            FecharJanelas();
+            Carregar();
+        }
+        catch (Exception ex)
+        {
+            erroRecebimento = ex.Message;
+        }
+    }
+
+    private void ConfirmarEstorno()
+    {
+        if (estornando == null) return;
+
+        try
+        {
+            contaDAO.Estornar(estornando.IdRecebimento);
+            aviso = $"Recebimento de {estornando.Valor:C} estornado.";
+            FecharJanelas();
+            Carregar();
+        }
+        catch (Exception ex)
+        {
+            erroRecebimento = ex.Message;
+        }
+    }
+
+    private void FecharJanelas()
+    {
+        recebendo = null;
+        estornando = null;
+        erroRecebimento = null;
+    }
+}

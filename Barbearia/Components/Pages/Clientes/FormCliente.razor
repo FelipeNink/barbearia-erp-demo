@@ -1,0 +1,274 @@
+@* Formulario de cliente, o mesmo para criar e editar. Quem decide qual
+   e a pagina (CadastrarCliente / EditarCliente), pelo parametro Novo. *@
+
+@using Barbearia.Configs
+@using Barbearia.Models
+@inject ClienteDAO clienteDAO
+@inject PlanoDAO planoDAO
+@inject AssinaturaDAO assinaturaDAO
+@inject FuncionarioDAO funcionarioDAO
+@inject NavigationManager Navigation
+
+<div class="form-pagina">
+    <TopoForm Titulo="@(Novo ? "Novo cliente" : "Editar cliente")" Voltar="/cliente" RotuloVoltar="Clientes" />
+
+    @if (erro != null)
+    {
+        <div class="alert alert-danger" role="alert">@erro</div>
+    }
+
+    <form @onsubmit="Salvar" novalidate>
+        <section class="cartao secao-form">
+            <h2>Dados pessoais</h2>
+            <div class="grade-12">
+                <Campo Rotulo="Nome" Para="cli-nome" Colunas="8" Obrigatorio="true"
+                       Erro="@(tentouSalvar && string.IsNullOrWhiteSpace(Modelo.NomeCliente) ? "Informe o nome." : null)">
+                    <input id="cli-nome" class="form-control" maxlength="100" autocomplete="off"
+                           @bind="Modelo.NomeCliente" />
+                </Campo>
+                <Campo Rotulo="Data de nascimento" Para="cli-nasc" Colunas="4">
+                    <input id="cli-nasc" type="date" class="form-control" @bind="Modelo.DataNascimento" />
+                </Campo>
+
+                <Campo Rotulo="Telefone" Para="cli-tel" Colunas="4" Erro="@Documentos.ErroTelefone(Modelo.Telefone)">
+                    <input id="cli-tel" class="form-control" inputmode="tel" data-mascara="telefone"
+                           placeholder="(69) 99999-9999" @bind="Modelo.Telefone" />
+                </Campo>
+                <Campo Rotulo="CPF" Para="cli-cpf" Colunas="4" Erro="@Documentos.ErroCpf(Modelo.CPF)">
+                    <input id="cli-cpf" class="form-control" inputmode="numeric" data-mascara="cpf"
+                           placeholder="000.000.000-00" @bind="Modelo.CPF" />
+                </Campo>
+                <Campo Rotulo="RG" Para="cli-rg" Colunas="4">
+                    <input id="cli-rg" class="form-control" maxlength="7" @bind="Modelo.RG" />
+                </Campo>
+                <Campo Rotulo="E-mail" Para="cli-email" Colunas="8" Erro="@Documentos.ErroEmail(Modelo.Email)">
+                    <input id="cli-email" type="email" class="form-control" maxlength="100"
+                           placeholder="nome@exemplo.com" @bind="Modelo.Email" />
+                </Campo>
+            </div>
+        </section>
+
+        <CamposEndereco Modelo="Modelo" Prefixo="cli" />
+
+        <section class="cartao secao-form">
+            <h2>Plano</h2>
+            <div class="grade-12">
+                <Campo Rotulo="Plano" Colunas="4"
+                       Dica="@(planos.Count == 0 ? "Nenhum plano cadastrado ainda." : null)">
+                    <ChildContent>
+                        <Seletor TItem="OpcaoId" TValor="int" Itens="OpcoesPlano"
+                                 Valor="Modelo.IdPlano ?? 0"
+                                 ValorChanged="v => Modelo.IdPlano = v == 0 ? null : v"
+                                 TextoDe="o => o.Rotulo" ValorDe="o => o.Id" />
+                    </ChildContent>
+                    <Acao>
+                        <button type="button" class="acao-campo" @onclick="() => modalPlano = true">
+                            + Cadastrar plano
+                        </button>
+                    </Acao>
+                </Campo>
+            </div>
+        </section>
+
+        <section class="cartao secao-form">
+            <h2>Relacionamento</h2>
+            <div class="grade-12">
+                <Campo Rotulo="Como conheceu" Colunas="4">
+                    <Seletor TItem="Opcao" TValor="string" Itens="OpcoesOrigem"
+                             Valor="@(Modelo.Origem ?? string.Empty)"
+                             ValorChanged="@(v => Modelo.Origem = string.IsNullOrEmpty(v) ? null : v)"
+                             TextoDe="o => o.Rotulo" ValorDe="o => o.Valor" />
+                </Campo>
+                <Campo Rotulo="Profissional preferido" Colunas="4">
+                    <Seletor TItem="OpcaoId" TValor="int" Itens="OpcoesProfissional"
+                             Valor="Modelo.IdProfissionalPreferidoCadastro ?? 0"
+                             ValorChanged="v => Modelo.IdProfissionalPreferidoCadastro = v == 0 ? null : v"
+                             TextoDe="o => o.Rotulo" ValorDe="o => o.Id" ComAvatar="true" />
+                </Campo>
+                <Campo Rotulo="Situação" Para="cli-ativo" Colunas="4">
+                    <div class="form-check form-switch campo-switch">
+                        <input id="cli-ativo" class="form-check-input" type="checkbox" role="switch" @bind="Modelo.Ativo" />
+                        <label class="form-check-label" for="cli-ativo">@(Modelo.Ativo ? "Ativo" : "Inativo")</label>
+                    </div>
+                </Campo>
+                @* LGPD: aniversario, "sumiu" e pedido de avaliacao so saem para
+                   quem nao recusou. O lembrete do horario e servico, nao depende. *@
+                <Campo Rotulo="Mensagens no WhatsApp" Colunas="4" Dica="@DicaConsentimento">
+                    <Seletor TItem="Opcao" TValor="string" Itens="OpcoesConsentimento"
+                             Valor="@ValorConsentimento"
+                             ValorChanged="@(v => Modelo.AceitaWhatsApp = v == "SIM" ? true : v == "NAO" ? false : null)"
+                             TextoDe="o => o.Rotulo" ValorDe="o => o.Valor" PontoDe="o => o.Cor" />
+                </Campo>
+                <Campo Rotulo="Observações" Para="cli-obs" Colunas="12">
+                    <textarea id="cli-obs" class="form-control" rows="3" maxlength="500"
+                              placeholder="Ex.: alérgico a pós-barba com álcool" @bind="Modelo.Observacoes"></textarea>
+                </Campo>
+            </div>
+        </section>
+
+        <RodapeForm Cancelar="/cliente" Salvando="salvando" />
+    </form>
+</div>
+
+<CadastroRapido Visivel="modalPlano"
+                Tipo="CadastroRapido.TipoCadastro.Plano"
+                OnCriado="AoCriarPlano"
+                OnCancelado="() => modalPlano = false" />
+
+@code {
+    [Parameter, EditorRequired] public Cliente Modelo { get; set; } = new();
+    [Parameter] public bool Novo { get; set; }
+
+    private List<Plano> planos = new();
+    private List<Funcionario> funcionarios = new();
+    private string? erro;
+    private bool tentouSalvar;
+    private bool salvando;
+    private bool modalPlano;
+
+    /// <summary>Sem plano e uma escolha valida, entao entra como item zero.</summary>
+    private List<OpcaoId> OpcoesPlano =>
+        new List<OpcaoId> { new(0, "Nenhum") }
+            .Concat(planos.Select(p => new OpcaoId(p.IdPlano, p.NomePlano ?? "Sem nome")))
+            .ToList();
+
+    private static readonly List<Opcao> OpcoesConsentimento = new()
+    {
+        new("", "Não perguntado", "var(--texto-fraco)"),
+        new("SIM", "Aceita receber", "var(--ok)"),
+        new("NAO", "Não aceita", "var(--perigo)")
+    };
+
+    private string ValorConsentimento => Modelo.AceitaWhatsApp switch
+    {
+        true => "SIM",
+        false => "NAO",
+        null => ""
+    };
+
+    /// <summary>Quando e onde respondeu; some enquanto a resposta nao foi salva.</summary>
+    private string DicaConsentimento =>
+        Modelo.AceitaWhatsAppEm is DateTime em && Modelo.AceitaWhatsApp != null
+            ? $"Respondeu em {em:dd/MM/yyyy} {OrigemConsentimento.Rotulo(Modelo.AceitaWhatsAppOrigem)}."
+            : "Aniversário, retorno e avaliação. O lembrete do horário não depende disto.";
+
+    private static List<Opcao> OpcoesOrigem =>
+        new List<Opcao> { new("", "Não informado") }
+            .Concat(OrigemCliente.Todas.Select(o => new Opcao(o.Valor, o.Rotulo)))
+            .ToList();
+
+    /// <summary>Inativos ficam de fora, menos o que ja esta escolhido.</summary>
+    private List<OpcaoId> OpcoesProfissional =>
+        new List<OpcaoId> { new(0, "Nenhum") }
+            .Concat(funcionarios
+                .Where(f => f.Ativo || f.IdFuncionario == Modelo.IdProfissionalPreferidoCadastro)
+                .Select(f => new OpcaoId(f.IdFuncionario, f.NomeFuncionario ?? "Sem nome")))
+            .ToList();
+
+
+    /// <summary>Plano com que o cliente abriu no formulario, para saber se foi trocado.</summary>
+    private int? planoOriginal;
+
+    private bool PrecisaVenderPlano(int idCliente) =>
+        Modelo.TemPlano
+        && Modelo.IdPlano != planoOriginal
+        && !assinaturaDAO.ListarAtivasDoCliente(idCliente)
+            .Any(a => a.IdPlano == Modelo.IdPlano && !a.Vencida);
+
+    protected override void OnInitialized()
+    {
+        planoOriginal = Modelo.IdPlano;
+
+        try
+        {
+            planos = planoDAO.ListarTodos();
+            funcionarios = funcionarioDAO.ListarTodos();
+        }
+        catch (Exception ex)
+        {
+            erro = "Erro ao carregar os planos: " + ex.Message;
+        }
+    }
+
+
+    private void AoCriarPlano(int id)
+    {
+        try
+        {
+            erro = null;
+            planos = planoDAO.ListarTodos() ?? new();
+            Modelo.IdPlano = id;
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+        finally
+        {
+            modalPlano = false;
+        }
+    }
+
+    private void Salvar()
+    {
+        tentouSalvar = true;
+        erro = null;
+
+        var temErro =
+            string.IsNullOrWhiteSpace(Modelo.NomeCliente)
+            || Documentos.ErroTelefone(Modelo.Telefone) != null
+            || Documentos.ErroCpf(Modelo.CPF) != null
+            || Documentos.ErroEmail(Modelo.Email) != null
+            || Documentos.ErroCep(Modelo.Cep) != null;
+
+        if (temErro)
+        {
+            erro = "Confira os campos destacados.";
+            return;
+        }
+
+        try
+        {
+            salvando = true;
+
+            // Grava sempre no mesmo formato, digitado com ou sem mascara.
+            Modelo.NomeCliente = Modelo.NomeCliente!.Trim();
+            Modelo.Telefone = Vazio(Documentos.FormatarTelefone(Modelo.Telefone));
+            Modelo.CPF = Vazio(Documentos.FormatarCpf(Modelo.CPF));
+            Modelo.Cep = Vazio(Documentos.FormatarCep(Modelo.Cep));
+            Modelo.RG = Vazio(Modelo.RG);
+            Modelo.Email = Vazio(Modelo.Email);
+            Modelo.Observacoes = Vazio(Modelo.Observacoes);
+
+            int idCliente;
+            if (Novo) idCliente = clienteDAO.Inserir(Modelo);
+            else
+            {
+                clienteDAO.Atualizar(Modelo);
+                idCliente = Modelo.IdCliente;
+            }
+
+            // A assinatura nasce da venda do plano, para o pagamento entrar
+            // no caixa. Plano escolhido ou trocado segue direto para essa venda,
+            // a menos que o cliente ja tenha esse plano valendo.
+            if (PrecisaVenderPlano(idCliente))
+            {
+                Navigation.NavigateTo($"/venda/nova?cliente={idCliente}&plano={Modelo.IdPlano}");
+                return;
+            }
+
+            Navigation.NavigateTo("/cliente");
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+        finally
+        {
+            salvando = false;
+        }
+    }
+
+    private static string? Vazio(string? texto) =>
+        string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
+}

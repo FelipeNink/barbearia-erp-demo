@@ -1,0 +1,23 @@
+# Build do .NET
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# Segredos locais: a connection string com usuario e senha do banco
+# mora aqui. Versionar o appsettings.Development.json publicaria isso.
+appsettings.Development.json
+appsettings.Local.json
+*.pfx
+
+# Sistema
+Thumbs.db
+.DS_Store
+
+# Variaveis locais do docker compose: senhas do banco e do primeiro acesso.
+.env

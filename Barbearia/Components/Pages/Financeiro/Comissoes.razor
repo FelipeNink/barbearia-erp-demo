@@ -1,0 +1,351 @@
+@page "/comissoes"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = Politicas.Comissoes)]
+
+@using Barbearia.Models
+@using Barbearia.Services
+@using Microsoft.AspNetCore.WebUtilities
+@inject ComissaoDAO comissaoDAO
+@inject FuncionarioDAO funcionarioDAO
+
+
+<AbasGrupo Abas="AbasGrupo.Repasses" />
+
+<h1 class="titulo-listagem">Gestão de Comissões</h1>
+<p class="dica-tela">Quanto cada profissional ganhou em cada venda.</p>
+
+<div class="barra-acoes barra-listagem">
+    <BotaoExportar Href="@UrlRelatorio" />
+    <BotaoExportar Tipo="BotaoExportar.Formato.Excel" Href="@UrlRelatorio.Replace("/relatorio/", "/excel/")" />
+</div>
+
+@if (!string.IsNullOrEmpty(erro))
+{
+    <div class="alert alert-danger">@erro</div>
+}
+
+@* ---------- filtros ---------- *@
+<section class="filtros">
+    <div class="campo">
+        <label>De</label>
+        <input type="date" class="form-control" @bind="de" />
+    </div>
+    <div class="campo">
+        <label>Até</label>
+        <input type="date" class="form-control" @bind="ate" />
+    </div>
+    <div class="campo">
+        <label>Profissional</label>
+        <Seletor TItem="OpcaoId" TValor="int" Itens="OpcoesFuncionario"
+                 @bind-Valor="idFuncionario" TextoDe="o => o.Rotulo" ValorDe="o => o.Id"
+                 ComAvatar="true" />
+    </div>
+    <div class="campo">
+        <label>Tipo</label>
+        <Seletor TItem="Opcao" TValor="string" Itens="OpcoesTipo"
+                 @bind-Valor="tipo" TextoDe="o => o.Rotulo" ValorDe="o => o.Valor" />
+    </div>
+    <div class="campo">
+        <label>Situação</label>
+        <Seletor TItem="Opcao" TValor="string" Itens="OpcoesSituacao"
+                 @bind-Valor="situacao" TextoDe="o => o.Rotulo" ValorDe="o => o.Valor"
+                 PontoDe="o => o.Cor" />
+    </div>
+    <div class="campo-acoes">
+        <button type="button" class="btn btn-primary" @onclick="Aplicar">Filtrar</button>
+        <button type="button" class="btn btn-outline-secondary" @onclick="Limpar">Limpar</button>
+    </div>
+</section>
+
+<div class="atalhos-periodo">
+    <button type="button" class="@(atalho == 0 ? "ativo" : "")" @onclick="() => Mes(0)">Este mês</button>
+    <button type="button" class="@(atalho == -1 ? "ativo" : "")" @onclick="() => Mes(-1)">Mês anterior</button>
+    <span class="periodo-texto">@de.ToString("dd/MM/yyyy") a @ate.ToString("dd/MM/yyyy")</span>
+</div>
+
+<div class="comissoes-layout">
+<div class="comissoes-principal">
+
+@* ---------- resumo ---------- *@
+<div class="resumo">
+    <div class="cartao-resumo comissao">
+        <span class="rotulo">Total</span>
+        <strong class="valor">@Filtradas.Sum(l => l.Comissao).ToString("C")</strong>
+    </div>
+    <div class="cartao-resumo">
+        <span class="rotulo">De serviços</span>
+        <strong class="valor">@Filtradas.Where(l => !l.EProduto).Sum(l => l.Comissao).ToString("C")</strong>
+    </div>
+    <div class="cartao-resumo">
+        <span class="rotulo">De produtos</span>
+        <strong class="valor">@Filtradas.Where(l => l.EProduto).Sum(l => l.Comissao).ToString("C")</strong>
+    </div>
+    <div class="cartao-resumo pendente">
+        <span class="rotulo">Pendente</span>
+        <strong class="valor">@Filtradas.Where(l => !l.Paga).Sum(l => l.Comissao).ToString("C")</strong>
+    </div>
+</div>
+
+<p class="nota-topo">
+    Esta tela é um relatório. O pagamento acontece em
+    <a href="/folha" class="link-texto">Fechamento do mês</a>, onde a comissão é somada ao salário fixo.
+    A comissão conta como paga quando o repasse do profissional naquele mês já foi liquidado.
+</p>
+
+<div class="tabela">
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Data</th>
+            <th>Venda</th>
+            <th>Cliente</th>
+            <th>Item</th>
+            <th>Profissional</th>
+            <th class="dir">Valor base</th>
+            <th class="dir">%</th>
+            <th class="dir">Comissão</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (Filtradas.Count > 0)
+        {
+            @foreach (var l in Filtradas)
+            {
+                <tr class="clicavel @(l == Selecionada ? "selecionada" : "")" title="Ver o cálculo"
+                    @onclick="() => selecionada = l">
+                    <td class="suave">@l.DataVenda.ToString("dd/MM/yyyy")</td>
+                    <td>#@l.IdVenda</td>
+                    <td>@(l.NomeCliente ?? "—")</td>
+                    <td>
+                        @l.Descricao
+                        @if (l.Quantidade > 1)
+                        {
+                            <span class="suave"> ×@l.Quantidade</span>
+                        }
+                        @if (l.CobertoPlano)
+                        {
+                            <span class="etiqueta-plano">plano</span>
+                        }
+                    </td>
+                    <td>@l.NomeFuncionario</td>
+                    <td class="dir">@l.ValorItem.ToString("C")</td>
+                    <td class="dir suave">@(l.Percentual?.ToString("P1") ?? "—")</td>
+                    <td class="dir destaque">
+                        <span class="status @(l.Paga ? "pago" : "pendente")" title="@(l.Paga ? "Paga" : "Pendente")">
+                            <i></i>@l.Comissao.ToString("C")
+                        </span>
+                    </td>
+                </tr>
+            }
+        }
+        else
+        {
+            <tr>
+                <td colspan="8" class="text-center text-muted">
+                    Nenhuma comissão gerada neste período.
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+</div>
+</div>
+
+@* Como a comissao da linha escolhida foi calculada, e o total de cada um no periodo. *@
+<aside class="comissoes-lado">
+    @if (Selecionada is { } sel)
+    {
+        var cor = CorProfissional.De(funcionarios, sel.IdFuncionario);
+        var nome = CorProfissional.PrimeiroNome(sel.NomeFuncionario);
+
+        <div class="cartao-calculo">
+            <header class="calculo-topo">
+                <span class="calculo-data">@Cultura.TextInfo.ToTitleCase(sel.DataVenda.ToString("dddd, dd/MM", Cultura))</span>
+                <strong class="calculo-item">@sel.Descricao@(sel.Quantidade > 1 ? $" ×{sel.Quantidade}" : "")</strong>
+                <span class="calculo-quem">@(sel.NomeCliente ?? "Consumidor") · com @nome</span>
+            </header>
+
+            <div class="calculo-corpo">
+                <div class="calculo-linha">
+                    <span>@(sel.EProduto ? "Valor do produto" : "Valor do serviço")</span>
+                    <strong>@sel.ValorItem.ToString("C")</strong>
+                </div>
+                <div class="calculo-linha">
+                    <span>Pagamento</span>
+                    <span class="selo-pagamento">✓ @FormaPagamento.Rotulo(sel.FormaPagamento)</span>
+                </div>
+
+                <div class="calculo-destaque @(sel.Paga ? "paga" : "")">
+                    <div>
+                        <span class="calculo-rotulo">Comissão de @nome</span>
+                        <small>
+                            @if (sel.Percentual is { } p)
+                            {
+                                @($"{p:P0} de {sel.ValorItem:C}")
+                            }
+                            else
+                            {
+                                @("Atendimento coberto pelo plano")
+                            }
+                            · @(sel.Paga ? "paga na folha" : "a pagar")
+                        </small>
+                    </div>
+                    <strong>@sel.Comissao.ToString("C")</strong>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="cartao-ranking">
+        <h3>Comissões do período</h3>
+        @if (Ranking.Count == 0)
+        {
+            <p class="suave">Nenhuma comissão no período.</p>
+        }
+        else
+        {
+            <ul>
+                @foreach (var r in Ranking)
+                {
+                    var cor = CorProfissional.De(funcionarios, r.Id);
+                    <li>
+                        <button type="button" class="@(idFuncionario == r.Id ? "ativo" : "")"
+                                title="@(idFuncionario == r.Id ? "Mostrar todos" : $"Só {r.Nome}")"
+                                @onclick="() => FiltrarProfissional(r.Id)">
+                            <span class="avatar" style="background: @cor; color: @CorProfissional.TextoSobre(cor)">@CorProfissional.Inicial(r.Nome)</span>
+                            <span class="ranking-nome">@r.Nome</span>
+                            <strong>@r.Total.ToString("C")</strong>
+                        </button>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+</aside>
+</div>
+
+@code {
+    private static readonly System.Globalization.CultureInfo Cultura = new("pt-BR");
+
+    private List<ComissaoDAO.LinhaComissao> linhas = new();
+    private List<Funcionario> funcionarios = new();
+    private ComissaoDAO.LinhaComissao? selecionada;
+    private List<OpcaoId> OpcoesFuncionario = new() { new(0, "Todos") };
+
+    private string? erro;
+
+    private DateTime de;
+    private DateTime ate;
+    private int idFuncionario;
+    private string tipo = "";
+    private string situacao = "";
+
+    /// <summary>0 = este mês, -1 = mês anterior, nulo = datas digitadas.</summary>
+    private int? atalho;
+
+    private static readonly List<Opcao> OpcoesTipo = new()
+    {
+        new("", "Todos"),
+        new(TipoItem.Servico, "Serviço"),
+        new(TipoItem.Produto, "Produto")
+    };
+
+    private static readonly List<Opcao> OpcoesSituacao = new()
+    {
+        new("", "Todas"),
+        new("PENDENTE", "Pendente", "var(--alerta)"),
+        new("PAGA", "Paga", "var(--ok)")
+    };
+
+    private List<ComissaoDAO.LinhaComissao> Filtradas =>
+        PorTipoESituacao
+            .Where(l => idFuncionario == 0 || l.IdFuncionario == idFuncionario)
+            .ToList();
+
+    /// <summary>A linha clicada, ou a mais recente se ela saiu do filtro.</summary>
+    private ComissaoDAO.LinhaComissao? Selecionada =>
+        selecionada != null && Filtradas.Contains(selecionada) ? selecionada : Filtradas.FirstOrDefault();
+
+    /// <summary>
+    /// Total de cada profissional, sem o filtro de profissional: escolher
+    /// alguem na lista nao pode fazer os outros sumirem dela.
+    /// </summary>
+    private List<(int Id, string Nome, decimal Total)> Ranking =>
+        PorTipoESituacao
+            .GroupBy(l => l.IdFuncionario)
+            .Select(g => (g.Key, g.First().NomeFuncionario ?? "—", g.Sum(l => l.Comissao)))
+            .OrderByDescending(r => r.Item3)
+            .ToList();
+
+    private void FiltrarProfissional(int id) => idFuncionario = idFuncionario == id ? 0 : id;
+
+    private List<ComissaoDAO.LinhaComissao> PorTipoESituacao =>
+        linhas
+            .Where(l => tipo == ""
+                        || (tipo == TipoItem.Produto ? l.EProduto : !l.EProduto))
+            .Where(l => situacao == "" || (situacao == "PAGA" ? l.Paga : !l.Paga))
+            .ToList();
+
+    private string UrlRelatorio =>
+        QueryHelpers.AddQueryString("/relatorio/comissoes", new Dictionary<string, string?>
+        {
+            ["de"] = de.ToString("yyyy-MM-dd"),
+            ["ate"] = ate.ToString("yyyy-MM-dd")
+        });
+
+    protected override void OnInitialized()
+    {
+        try
+        {
+            funcionarios = funcionarioDAO.ListarTodos();
+            OpcoesFuncionario.AddRange(funcionarios
+                .Select(f => new OpcaoId(f.IdFuncionario, f.NomeFuncionario ?? "Sem nome")));
+        }
+        catch (Exception ex)
+        {
+            erro = "Erro ao carregar os profissionais: " + ex.Message;
+        }
+
+        Mes(0);
+    }
+
+    private void Mes(int deslocamento)
+    {
+        var inicio = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(deslocamento);
+        de = inicio;
+        ate = deslocamento == 0 ? DateTime.Today : inicio.AddMonths(1).AddDays(-1);
+        atalho = deslocamento;
+        Carregar();
+    }
+
+    private void Aplicar()
+    {
+        atalho = null;
+        Carregar();
+    }
+
+    private void Limpar()
+    {
+        idFuncionario = 0;
+        tipo = "";
+        situacao = "";
+        Mes(0);
+    }
+
+    private void Carregar()
+    {
+        try
+        {
+            erro = null;
+            // 'ate' e exclusivo no SQL: soma um dia para incluir o dia escolhido.
+            // Todos os profissionais: o filtro de profissional e aplicado na
+            // tela, para o ranking ao lado continuar mostrando todo mundo.
+            linhas = comissaoDAO.ListarItens(de, ate.AddDays(1));
+        }
+        catch (Exception ex)
+        {
+            erro = "Erro ao carregar as comissões: " + ex.Message;
+            linhas = new();
+        }
+    }
+}

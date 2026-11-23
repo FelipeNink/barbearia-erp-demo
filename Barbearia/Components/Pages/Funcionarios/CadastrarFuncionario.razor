@@ -1,0 +1,13 @@
+@page "/funcionario/novo"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = Politicas.CriarFuncionario)]
+
+@using Barbearia.Models
+
+<PageTitle>Novo funcionário</PageTitle>
+
+<FormFuncionario Modelo="funcionario" Novo="true" />
+
+@code {
+    private readonly Funcionario funcionario = new();
+}

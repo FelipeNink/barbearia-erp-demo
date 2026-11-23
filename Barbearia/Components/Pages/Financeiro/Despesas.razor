@@ -1,0 +1,399 @@
+@page "/despesas"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = Politicas.Despesas)]
+
+@using Barbearia.Models
+@using Microsoft.AspNetCore.WebUtilities
+@inject DespesaDAO despesaDAO
+@inject FornecedorDAO fornecedorDAO
+@inject FuncionarioDAO funcionarioDAO
+@inject CategoriaDAO categoriaDAO
+@inject NavigationManager Navigation
+
+
+<h1 class="titulo-listagem">Gestão de Despesas</h1>
+
+@if (!string.IsNullOrEmpty(erro))
+{
+    <div class="alert alert-danger">@erro</div>
+}
+@if (!string.IsNullOrEmpty(aviso))
+{
+    <div class="alert alert-success">@aviso</div>
+}
+
+<div class="barra-acoes barra-listagem">
+    <BotaoExportar Href="@UrlRelatorio" />
+    <BotaoExportar Tipo="BotaoExportar.Formato.Excel" Href="@UrlRelatorio.Replace("/relatorio/", "/excel/")" />
+    <a href="/despesa/nova" class="btn-novo btn-cadastrar">Cadastrar despesa</a>
+</div>
+
+@* ---------- filtros ---------- *@
+<section class="filtros">
+    <div class="campo">
+        <label>Vencimento de</label>
+        <input type="date" class="form-control" @bind="de" />
+    </div>
+    <div class="campo">
+        <label>Até</label>
+        <input type="date" class="form-control" @bind="ate" />
+    </div>
+    <div class="campo campo-largo">
+        <label>Descrição</label>
+        <input class="form-control" placeholder="Buscar despesa" @bind="filtroDescricao" />
+    </div>
+    <div class="campo">
+        <label>Favorecido</label>
+        <Seletor TItem="Opcao" TValor="string" Itens="OpcoesFavorecidoFiltro"
+                 @bind-Valor="filtroFavorecido" TextoDe="o => o.Rotulo" ValorDe="o => o.Valor" />
+    </div>
+    <div class="campo">
+        <label>Situação</label>
+        <Seletor TItem="Opcao" TValor="string" Itens="OpcoesSituacao"
+                 @bind-Valor="filtroSituacao" TextoDe="o => o.Rotulo" ValorDe="o => o.Valor"
+                 PontoDe="o => o.Cor" />
+    </div>
+    <div class="campo">
+        <label>Categoria</label>
+        <Seletor TItem="Opcao" TValor="string" Itens="OpcoesCategoriaFiltro"
+                 @bind-Valor="filtroCategoria" TextoDe="o => o.Rotulo" ValorDe="o => o.Valor" />
+    </div>
+    <div class="campo">
+        <label>Pagamento</label>
+        <Seletor TItem="Opcao" TValor="string" Itens="OpcoesFormaFiltro"
+                 @bind-Valor="filtroForma" TextoDe="o => o.Rotulo" ValorDe="o => o.Valor"
+                 PontoDe="o => o.Cor" />
+    </div>
+    <div class="campo-acoes">
+        <button type="button" class="btn btn-primary" @onclick="Carregar">Filtrar</button>
+        <button type="button" class="btn btn-outline-secondary" @onclick="Limpar">Limpar</button>
+    </div>
+</section>
+
+<div class="atalhos-periodo">
+    <button type="button" @onclick="AtalhoVencidas">Vencidas</button>
+    <button type="button" @onclick="() => AtalhoAPagar(0)">Vence hoje</button>
+    <button type="button" @onclick="() => AtalhoAPagar(7)">Próximos 7 dias</button>
+    <button type="button" @onclick="PeriodoMes">Este mês</button>
+</div>
+
+@* ---------- resumo ---------- *@
+<div class="resumo">
+    <div class="cartao-resumo">
+        <span class="rotulo">A pagar</span>
+        <strong class="valor">@Filtradas.Where(d => !d.Pago).Sum(d => d.Valor).ToString("C")</strong>
+    </div>
+    <div class="cartao-resumo prejuizo">
+        <span class="rotulo">Vencido</span>
+        <strong class="valor">@Filtradas.Where(d => Vencida(d)).Sum(d => d.Valor).ToString("C")</strong>
+    </div>
+    <div class="cartao-resumo">
+        <span class="rotulo">Pago no período</span>
+        <strong class="valor">@Filtradas.Where(d => d.Pago).Sum(d => d.Valor).ToString("C")</strong>
+    </div>
+    <div class="cartao-resumo total">
+        <span class="rotulo">Total</span>
+        <strong class="valor">@Filtradas.Sum(d => d.Valor).ToString("C")</strong>
+    </div>
+</div>
+
+<div class="tabela">
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Vencimento</th>
+            <th>Descrição</th>
+            <th>Categoria</th>
+            <th>Favorecido</th>
+            <th>Pagamento</th>
+            <th>Parcela</th>
+            <th class="dir">Valor</th>
+            <th>Pago em</th>
+            <th>Situação</th>
+            <th class="col-acao">Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (Filtradas.Count > 0)
+        {
+            @foreach (var d in Filtradas)
+            {
+                <tr>
+                    <td>@((d.DataVencimento ?? d.DataDespesa).ToString("dd/MM/yyyy"))</td>
+                    <td>@d.Descricao</td>
+                    <td>@d.RotuloCategoria</td>
+                    <td>@(!string.IsNullOrWhiteSpace(d.NomeFornecedor) ? d.NomeFornecedor : d.NomeFuncionario ?? "—")</td>
+                    <td>@FormaPagamento.Rotulo(d.FormaPagamentoDespesa)</td>
+                    <td>@(d.Parcelas > 1 ? $"{d.Parcelas}×" : "—")</td>
+                    <td class="dir">@d.Valor.ToString("C")</td>
+                    <td>@(d.Pago ? d.DataPagamento?.ToString("dd/MM/yyyy") ?? "—" : "—")</td>
+                    <td>
+                        <span class="status @ClasseSituacao(d)"><i></i>@RotuloSituacao(d)</span>
+                    </td>
+                    <td class="col-acao">
+                        <AcoesLinha OnVisualizar="() => visualizando = d"
+                                    OnEditar="() => Editar(d)"
+                                    OnExcluir="() => excluindo = d" />
+                    </td>
+                </tr>
+            }
+        }
+        else
+        {
+            <tr>
+                <td colspan="10" class="text-center text-muted">Nenhuma despesa encontrada.</td>
+            </tr>
+        }
+    </tbody>
+</table>
+</div>
+
+<ConfirmarModal Visivel="@(excluindo != null)" Titulo="Excluir despesa" Erro="@erroExclusao"
+                OnConfirmar="ConfirmarExclusao" OnCancelar="CancelarExclusao">
+    Tem certeza que deseja excluir <strong>@excluindo?.Descricao</strong> (@excluindo?.Valor.ToString("C"))?<br />
+    <span class="text-muted">Esta ação não pode ser desfeita.</span>
+</ConfirmarModal>
+
+<Janela Visivel="@(visualizando != null)" Titulo="@(visualizando?.Descricao ?? "Despesa")" OnFechar="FecharJanelas">
+    <ChildContent>
+        @if (visualizando != null)
+        {
+            <dl class="ficha">
+                <div><dt>Vencimento</dt><dd>@(visualizando.DataVencimento?.ToString("dd/MM/yyyy") ?? "—")</dd></div>
+                <div><dt>Pago em</dt><dd>@(visualizando.Pago ? visualizando.DataPagamento?.ToString("dd/MM/yyyy") ?? "—" : "em aberto")</dd></div>
+                <div><dt>Valor</dt><dd>@visualizando.Valor.ToString("C")@(visualizando.Parcelas > 1 ? $" em {visualizando.Parcelas}×" : "")</dd></div>
+                <div><dt>Categoria</dt><dd>@visualizando.RotuloCategoria</dd></div>
+                <div><dt>Pagamento</dt><dd>@FormaPagamento.Rotulo(visualizando.FormaPagamentoDespesa)@(visualizando.Pago ? "" : " (em aberto)")</dd></div>
+                <div><dt>Fornecedor</dt><dd>@(visualizando.NomeFornecedor ?? "—")</dd></div>
+                <div><dt>Funcionário</dt><dd>@(visualizando.NomeFuncionario ?? "—")</dd></div>
+                <div><dt>Recorrente</dt><dd>@(visualizando.Recorrente ? "Sim, todo mês" : "Não")</dd></div>
+                <div><dt>Anexos</dt><dd>@(visualizando.QuantidadeAnexos > 0 ? $"{visualizando.QuantidadeAnexos} arquivo(s) — veja em Editar" : "—")</dd></div>
+                <div><dt>Caixa</dt><dd>@(visualizando.IdCaixa.HasValue ? $"#{visualizando.IdCaixa}" : "—")</dd></div>
+                <div class="largo"><dt>Observação</dt><dd>@(string.IsNullOrWhiteSpace(visualizando.Observacao) ? "—" : visualizando.Observacao)</dd></div>
+            </dl>
+        }
+    </ChildContent>
+    <Rodape>
+        <button type="button" class="btn btn-outline-secondary" @onclick="FecharJanelas">Fechar</button>
+        <button type="button" class="btn btn-primary" @onclick="() => Editar(visualizando!)">Editar</button>
+    </Rodape>
+</Janela>
+
+@code {
+    private List<Despesa> despesas = new();
+    private List<Fornecedor> fornecedores = new();
+    private List<Funcionario> funcionarios = new();
+
+    // Opcoes dos seletores. O "Todas"/"Nenhum" entra como item da lista,
+    // porque o Seletor nao tem <option> solta como o select nativo.
+    private List<Categoria> categorias = new();
+
+    private List<Opcao> OpcoesCategoria =>
+        categorias.Select(c => new Opcao(c.Codigo!, c.Nome)).ToList();
+
+    private List<Opcao> OpcoesCategoriaFiltro =>
+        new List<Opcao> { new("", "Todas") }.Concat(OpcoesCategoria).ToList();
+
+    private List<Opcao> OpcoesForma =>
+        FormaPagamento.Todas.Select(f => new Opcao(f.Valor, f.Rotulo, "var(--ok)")).ToList();
+
+    private List<Opcao> OpcoesFormaFiltro =>
+        new List<Opcao> { new("", "Todos") }.Concat(OpcoesForma).ToList();
+
+
+    private string? erro;
+    private string? aviso;
+
+    private Despesa? excluindo;
+    private string? erroExclusao;
+
+    private void ConfirmarExclusao()
+    {
+        if (excluindo == null) return;
+
+        var id = excluindo.IdDespesa;
+        excluindo = null;
+        Excluir(id); // o proprio Excluir mostra o erro, se houver
+    }
+
+    private void CancelarExclusao()
+    {
+        excluindo = null;
+        erroExclusao = null;
+    }
+
+    private Despesa? visualizando;
+
+    private DateTime? de;
+    private DateTime? ate;
+    private string filtroCategoria = "";
+    private string filtroForma = "";
+
+    // Filtros aplicados em memoria sobre o que o DAO devolveu.
+    private string filtroDescricao = "";
+    /// <summary>"F:id" para fornecedor, "U:id" para funcionário.</summary>
+    private string filtroFavorecido = "";
+    private string filtroSituacao = "";
+
+    private const string SituacaoPaga = "PAGA";
+    private const string SituacaoAberta = "ABERTA";
+    private const string SituacaoVencida = "VENCIDA";
+
+    /// <summary>
+    /// Sem data de vencimento propria, a data da despesa faz as vezes dela:
+    /// em aberto com data passada e vencida.
+    /// </summary>
+    private static bool Vencida(Despesa d) => !d.Pago && d.DataDespesa.Date < DateTime.Today;
+
+    private static string Situacao(Despesa d) =>
+        d.Pago ? SituacaoPaga : Vencida(d) ? SituacaoVencida : SituacaoAberta;
+
+    private static string RotuloSituacao(Despesa d) => Situacao(d) switch
+    {
+        SituacaoPaga => "Paga",
+        SituacaoVencida => "Vencida",
+        _ => "Em aberto"
+    };
+
+    private static string ClasseSituacao(Despesa d) => Situacao(d) switch
+    {
+        SituacaoPaga => "pago",
+        SituacaoVencida => "erro",
+        _ => "pendente"
+    };
+
+    private List<Despesa> Filtradas =>
+        despesas
+            .Where(d => string.IsNullOrWhiteSpace(filtroDescricao)
+                        || d.Descricao.Contains(filtroDescricao.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Where(d => filtroFavorecido == ""
+                        || filtroFavorecido == $"F:{d.IdFornecedor}"
+                        || filtroFavorecido == $"U:{d.IdFuncionario}")
+            .Where(d => filtroSituacao == ""
+                        // "Em aberto" inclui as vencidas: as duas estao por pagar.
+                        || (filtroSituacao == SituacaoAberta ? !d.Pago : Situacao(d) == filtroSituacao))
+            .ToList();
+
+    private List<Opcao> OpcoesFavorecidoFiltro =>
+        new List<Opcao> { new("", "Todos") }
+            .Concat(fornecedores.Select(f => new Opcao($"F:{f.IdFornecedor}", f.NomeFornecedor ?? "Sem nome")))
+            .Concat(funcionarios.Select(f => new Opcao($"U:{f.IdFuncionario}", $"{f.NomeFuncionario ?? "Sem nome"} (funcionário)")))
+            .ToList();
+
+    private static readonly List<Opcao> OpcoesSituacao = new()
+    {
+        new("", "Todas"),
+        new(SituacaoAberta, "Em aberto", "var(--alerta)"),
+        new(SituacaoVencida, "Vencida", "var(--perigo)"),
+        new(SituacaoPaga, "Paga", "var(--ok)")
+    };
+
+    private string UrlRelatorio
+    {
+        get
+        {
+            var p = new Dictionary<string, string?>();
+            if (de.HasValue) p["de"] = de.Value.ToString("yyyy-MM-dd");
+            if (ate.HasValue) p["ate"] = ate.Value.ToString("yyyy-MM-dd");
+            if (!string.IsNullOrWhiteSpace(filtroCategoria)) p["categoria"] = filtroCategoria;
+            if (!string.IsNullOrWhiteSpace(filtroForma)) p["forma"] = filtroForma;
+            return QueryHelpers.AddQueryString("/relatorio/despesas", p);
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        try
+        {
+            fornecedores = fornecedorDAO.ListarTodos() ?? new();
+            funcionarios = funcionarioDAO.ListarTodos();
+            categorias = categoriaDAO.Listar(TipoCategoria.Despesa);
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+
+        Carregar();
+    }
+
+    private void Carregar()
+    {
+        try
+        {
+            erro = null;
+            despesas = despesaDAO.Listar(new DespesaDAO.Filtro
+            {
+                De = de,
+                Ate = ate?.AddDays(1),
+                Categoria = string.IsNullOrWhiteSpace(filtroCategoria) ? null : filtroCategoria,
+                FormaPagamento = string.IsNullOrWhiteSpace(filtroForma) ? null : filtroForma
+            });
+        }
+        catch (Exception ex)
+        {
+            erro = "Erro ao carregar as despesas: " + ex.Message;
+            despesas = new();
+        }
+    }
+
+
+    private void Excluir(int id)
+    {
+        try
+        {
+            erro = null;
+            despesaDAO.Excluir(id);
+            aviso = "Despesa excluída.";
+            Carregar();
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+    }
+
+
+    /// <summary>A edicao e uma pagina propria, com o mesmo formulario do lancamento.</summary>
+    private void Editar(Despesa d) => Navigation.NavigateTo($"/despesa/{d.IdDespesa}");
+
+    private void FecharJanelas() => visualizando = null;
+
+
+    private void Limpar()
+    {
+        de = ate = null;
+        filtroCategoria = "";
+        filtroForma = "";
+        filtroDescricao = "";
+        filtroFavorecido = "";
+        filtroSituacao = "";
+        Carregar();
+    }
+
+    private void AtalhoVencidas()
+    {
+        de = null;
+        ate = DateTime.Today.AddDays(-1);
+        filtroSituacao = SituacaoVencida;
+        Carregar();
+    }
+
+    /// <summary>Em aberto com vencimento de hoje ate daqui a 'dias'.</summary>
+    private void AtalhoAPagar(int dias)
+    {
+        de = DateTime.Today;
+        ate = DateTime.Today.AddDays(dias);
+        filtroSituacao = SituacaoAberta;
+        Carregar();
+    }
+
+    private void PeriodoMes()
+    {
+        var hoje = DateTime.Today;
+        de = new DateTime(hoje.Year, hoje.Month, 1);
+        ate = de.Value.AddMonths(1).AddDays(-1);
+        filtroSituacao = "";
+        Carregar();
+    }
+}

@@ -1,0 +1,105 @@
+﻿@inject Barbearia.Data.MarcaDAO marcaDAO
+<!DOCTYPE html>
+@* Logo e cores da barbearia (do administrador) ja vem no HTML, para todo
+   mundo. A logo propria de quem nao e administrador entra por cima no
+   script do <head>; data-logo-global e para onde ela volta quando sai. *@
+<html lang="pt-BR" translate="no"
+      data-logo-global="@marca.UrlLogo"
+      data-logo="@(marca.TemLogo ? "propria" : null)"
+      style="@(marca.TemLogo ? $"--logo-propria:url(\"{marca.UrlLogo}\")" : null)">
+
+<head>
+    <meta charset="utf-8" />
+    @* Sistema ja e em portugues: impede o tradutor do navegador de
+       "traduzir" os rotulos do menu e quebra-los. *@
+    <meta name="google" content="notranslate" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <title>Barbearia Modelo</title>
+    @* Barra do navegador no celular acompanha o tema. *@
+    <meta name="theme-color" content="#f7f8fa" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#14171c" media="(prefers-color-scheme: dark)" />
+
+    @* Barlow para o corpo e Barlow Condensed para titulos e numeros
+       grandes: a condensada aperta o traco e da o ar de letreiro de
+       barbearia que a marca ja tem. *@
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" />
+
+    @* Antes do CSS: aplica o tema salvo ja na primeira pintura. Se esperasse
+       o Blazor iniciar, a tela piscaria branca antes de escurecer. *@
+    <script>
+        (function () {
+            try {
+                var t = localStorage.getItem("tema");
+                if (!t) t = matchMedia("(prefers-color-scheme: dark)").matches ? "escuro" : "claro";
+                document.documentElement.setAttribute("data-tema", t);
+            } catch (e) {
+                document.documentElement.setAttribute("data-tema", "claro");
+            }
+        })();
+    </script>
+
+    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["Barbearia.styles.css"]" />
+
+    @if (coresGlobais != "")
+    {
+        <style id="cores-globais">@((MarkupString)coresGlobais)</style>
+    }
+
+    @* Marca propria da pessoa: as cores que ela escolheu e a logo que
+       enviou. Vem depois do app.css de proposito, porque e um override
+       dele -- e ainda antes da primeira pintura, entao a tela nao pisca
+       na cor antiga antes de assumir a nova. *@
+    <script>
+        (function () {
+            try {
+                var css = localStorage.getItem("marca.css");
+                if (css) {
+                    var tag = document.createElement("style");
+                    tag.id = "cores-proprias";
+                    tag.textContent = css;
+                    document.head.appendChild(tag);
+                }
+
+                var logo = localStorage.getItem("marca.logo");
+                if (logo) {
+                    var raiz = document.documentElement;
+                    raiz.style.setProperty("--logo-propria", 'url("' + logo + '")');
+                    raiz.setAttribute("data-logo", "propria");
+                }
+            } catch (e) { /* storage bloqueado: fica o padrao */ }
+        })();
+    </script>
+
+    <ImportMap />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    @* PNG como reserva para navegador que nao le favicon SVG. *@
+    <link rel="alternate icon" type="image/png" href="favicon.png" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <script src="js/dashboard.js" defer></script>
+    <script src="js/ui.js" defer></script>
+    <HeadOutlet />
+</head>
+
+<body>
+    <Routes />
+    <script src="_framework/blazor.web.js"></script>
+</body>
+
+</html>
+
+@code {
+    private Barbearia.Data.MarcaDAO.MarcaGlobal marca = null!;
+    private string coresGlobais = "";
+
+    protected override void OnInitialized()
+    {
+        marca = marcaDAO.Ler();
+        coresGlobais = Barbearia.Configs.Paleta.Css(marca.Primaria, marca.Secundaria);
+    }
+}

@@ -1,0 +1,744 @@
+@page "/vendas"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = Politicas.Vendas)]
+
+@using Barbearia.Configs
+@using Barbearia.Models
+@using Microsoft.AspNetCore.WebUtilities
+@inject VendaDAO vendaDAO
+@inject FuncionarioDAO funcionarioDAO
+@inject ClienteDAO clienteDAO
+@inject AvaliacaoDAO avaliacaoDAO
+@inject NavigationManager Navigation
+@inject Barbearia.Services.AuthenticationService auth
+@inject Autorizacao permissao
+
+
+<h1 class="titulo-listagem">Gestão de Vendas</h1>
+<div class="barra-acoes barra-listagem">
+    <BotaoExportar Href="@UrlRelatorio" />
+    <BotaoExportar Tipo="BotaoExportar.Formato.Excel" Href="@UrlRelatorio.Replace("/relatorio/", "/excel/")" />
+    <a href="/venda/nova" class="btn-novo btn-cadastrar">Cadastrar venda</a>
+</div>
+
+@if (idNova.HasValue)
+{
+    @* O pedido de avaliacao sai na hora, com o cliente ainda na cadeira. *@
+    <div class="alert alert-success alerta-venda">
+        <span>Venda #@idNova registrada com sucesso.</span>
+        @if (avaliacaoNova is { NotaDada: null } pedido)
+        {
+            <BotaoWhatsApp Telefone="@pedido.Telefone" Rotulo="Pedir avaliação"
+                           Titulo="Mandar o link de avaliação no WhatsApp" Mensagem="@pedido.Mensagem" />
+        }
+    </div>
+}
+@if (idEditada.HasValue)
+{
+    <div class="alert alert-success">Venda #@idEditada salva.</div>
+}
+@if (!string.IsNullOrEmpty(erro))
+{
+    <div class="alert alert-danger">@erro</div>
+}
+
+@* ---------- filtros ---------- *@
+<section class="filtros">
+    <div class="campo">
+        <label>De</label>
+        <input type="date" class="form-control" @bind="de" />
+    </div>
+    <div class="campo">
+        <label>Até</label>
+        <input type="date" class="form-control" @bind="ate" />
+    </div>
+    <div class="campo campo-largo">
+        <label>Cliente</label>
+        <input class="form-control" placeholder="Nome do cliente" @bind="cliente" />
+    </div>
+    <div class="campo">
+        <label>Profissional</label>
+        <Seletor TItem="OpcaoFuncionario" TValor="int"
+                 Itens="OpcoesFuncionario"
+                 @bind-Valor="idFuncionario"
+                 TextoDe="o => o.Nome"
+                 ValorDe="o => o.Id"
+                 ComAvatar="true"
+                 ContagemDe="o => o.Contagem" />
+    </div>
+    <div class="campo">
+        <label>Pagamento</label>
+        <Seletor TItem="OpcaoPagamento" TValor="string"
+                 Itens="OpcoesPagamento"
+                 @bind-Valor="formaPagamento"
+                 TextoDe="o => o.Rotulo"
+                 ValorDe="o => o.Valor"
+                 PontoDe="o => o.Cor" />
+    </div>
+    <div class="campo-acoes">
+        <button type="button" class="btn btn-primary" @onclick="Aplicar">Filtrar</button>
+        <button type="button" class="btn btn-outline-secondary" @onclick="Limpar">Limpar</button>
+    </div>
+</section>
+
+<div class="atalhos-periodo">
+    <button type="button" @onclick="() => Periodo(0)">Hoje</button>
+    <button type="button" @onclick="() => Periodo(7)">Últimos 7 dias</button>
+    <button type="button" @onclick="() => Periodo(30)">Últimos 30 dias</button>
+    <button type="button" @onclick="PeriodoMes">Este mês</button>
+</div>
+
+@* ---------- resumo ---------- *@
+<div class="resumo">
+    <div class="cartao-resumo">
+        <span class="rotulo">Vendas</span>
+        <strong class="valor">@vendas.Count</strong>
+    </div>
+    <div class="cartao-resumo">
+        <span class="rotulo">Faturamento</span>
+        <strong class="valor">@vendas.Sum(v => v.ValorVenda).ToString("C")</strong>
+    </div>
+    <div class="cartao-resumo">
+        <span class="rotulo">Ticket médio</span>
+        <strong class="valor">@TicketMedio.ToString("C")</strong>
+    </div>
+    <div class="cartao-resumo comissao">
+        <span class="rotulo">Comissões</span>
+        <strong class="valor">@vendas.Sum(v => v.ComissaoGravada).ToString("C")</strong>
+    </div>
+</div>
+
+@* ---------- tabela enxuta ---------- *@
+<div class="tabela">
+<table class="table">
+    <thead>
+        <tr>
+            <th>Hora</th>
+            <th>Cliente</th>
+            <th>Itens</th>
+            <th>Profissional</th>
+            <th>Pagamento</th>
+            <th class="col-num">Valor</th>
+            <th class="col-acoes">Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (vendas.Count > 0)
+        {
+            @* Agrupado por dia: numa lista longa, a data repetida em toda
+               linha vira ruido e o total do dia some. *@
+            @foreach (var dia in VendasPorDia)
+            {
+                <tr class="grupo-dia">
+                    <td colspan="7">
+                        <span class="grupo-dia-titulo">@RotuloDoDia(dia.Key)</span>
+                        <span class="grupo-dia-resumo">
+                            @dia.Count() venda(s) · @dia.Sum(v => v.ValorVenda).ToString("C")
+                        </span>
+                    </td>
+                </tr>
+
+                @foreach (var v in dia)
+                {
+                    <tr class="clicavel @(v.Status == StatusVenda.Cancelada ? "cancelada" : "")"
+                        @onclick="() => Visualizar(v.IdVenda)">
+                        <td><span class="hora">@v.DataVenda.ToString("HH:mm")</span></td>
+                        <td>
+                            <span class="nome-cliente">
+                                @(string.IsNullOrWhiteSpace(v.NomeCliente) ? "—" : v.NomeCliente)
+                            </span>
+                        </td>
+                        <td><span class="descritivo">@ResumoDeItens(v)</span></td>
+                        <td><span class="descritivo">@(v.NomeFuncionario ?? "—")</span></td>
+                        <td>
+                            <span class="status @ClasseDoPagamento(v)">
+                                <i></i>@FormaPagamento.Rotulo(v.FormaPagamentoVenda)
+                            </span>
+                        </td>
+                        <td class="col-num">@v.ValorVenda.ToString("C")</td>
+                        <td class="col-acoes">
+                            <span @onclick:stopPropagation="true">
+                                <AcoesLinha OnVisualizar="() => Visualizar(v.IdVenda)"
+                                            OnEditar="() => Editar(v.IdVenda)"
+                                            OnExcluir="() => AbrirCancelamento(v.IdVenda)"
+                                            RotuloExcluir="Cancelar venda" />
+                            </span>
+                        </td>
+                    </tr>
+                }
+            }
+        }
+        else
+        {
+            <tr>
+                <td colspan="7" class="vazio">Nenhuma venda encontrada.</td>
+            </tr>
+        }
+    </tbody>
+</table>
+</div>
+
+@* ---------- detalhe ---------- *@
+@if (detalhe != null)
+{
+    <div class="modal-overlay" @onclick="Fechar">
+        <div class="modal-content" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h5>Venda #@detalhe.IdVenda</h5>
+                <span class="detalhe-data">@detalhe.DataVenda.ToString("dd/MM/yyyy 'às' HH:mm")</span>
+            </div>
+
+            <div class="modal-body">
+                <dl class="dados">
+                    <div>
+                        <dt>Cliente</dt>
+                        <dd>@(string.IsNullOrWhiteSpace(detalhe.NomeCliente) ? "—" : detalhe.NomeCliente)</dd>
+                    </div>
+                    <div>
+                        <dt>Profissional</dt>
+                        <dd>@(string.IsNullOrWhiteSpace(detalhe.NomeFuncionario) ? "—" : detalhe.NomeFuncionario)</dd>
+                    </div>
+                    <div>
+                        <dt>Pagamento</dt>
+                        <dd>
+                            @if (detalhe.Pagamentos.Count > 1)
+                            {
+                                @foreach (var p in detalhe.Pagamentos)
+                                {
+                                    <div>
+                                        @FormaPagamento.Rotulo(p.Forma) @p.Valor.ToString("C")
+                                        @if (p.Parcelas > 1)
+                                        {
+                                            <text> em @p.Parcelas×</text>
+                                        }
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                @FormaPagamento.Rotulo(detalhe.FormaPagamentoVenda)
+                                @if (detalhe.QuantidadeParcelas > 1)
+                                {
+                                    <text> em @detalhe.QuantidadeParcelas×</text>
+                                }
+                            }
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>Situação</dt>
+                        <dd class="@(detalhe.Status == StatusVenda.Cancelada ? "cancelada" : "")">
+                            @detalhe.Status
+                        </dd>
+                    </div>
+                </dl>
+
+                <table class="tabela-detalhe">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th class="dir">Qtd</th>
+                            <th class="dir">Unit.</th>
+                            <th class="dir">Total</th>
+                            <th class="dir">Comissão</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var i in detalhe.Itens)
+                        {
+                            <tr>
+                                <td>
+                                    @i.Descricao <span class="tipo">@i.RotuloTipo</span>
+                                    @if (!string.IsNullOrWhiteSpace(i.NomeFuncionario) && i.NomeFuncionario != detalhe.NomeFuncionario)
+                                    {
+                                        <span class="tipo">· @i.NomeFuncionario</span>
+                                    }
+                                    @if (i.Desconto > 0)
+                                    {
+                                        <span class="tipo">· desc. @i.Desconto.ToString("C")</span>
+                                    }
+                                </td>
+                                <td class="dir">@i.Quantidade</td>
+                                <td class="dir">@i.ValorUnitario.ToString("C")</td>
+                                <td class="dir">@i.ValorTotal.ToString("C")</td>
+                                <td class="dir">@(i.ComissaoTotal > 0 ? i.ComissaoTotal.ToString("C") : "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+
+                <div class="detalhe-totais comanda">
+                    <div><span>Subtotal</span><span>@detalhe.Subtotal.ToString("C")</span></div>
+                    @if (detalhe.Desconto > 0)
+                    {
+                        <div class="desconto"><span>Desconto</span><span>− @detalhe.Desconto.ToString("C")</span></div>
+                    }
+                    <div class="total"><span>Total</span><span>@detalhe.ValorVenda.ToString("C")</span></div>
+                    @if (detalhe.Gorjeta > 0)
+                    {
+                        <div class="desconto"><span>Gorjeta (paga junto, vai na folha)</span><span>+ @detalhe.Gorjeta.ToString("C")</span></div>
+                    }
+                    @if (detalhe.Comissao > 0)
+                    {
+                        <div class="linha-comissao">
+                            <span>@(detalhe.Itens.Select(i => i.IdFuncionario).Distinct().Count() > 1 ? "Comissões" : $"Comissão de {detalhe.NomeFuncionario}")</span>
+                            <span>@detalhe.Comissao.ToString("C")</span>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                @if (detalhe.Status != StatusVenda.Cancelada)
+                {
+                    <button class="btn btn-outline-danger me-auto" @onclick="() => cancelando = true">
+                        Cancelar venda
+                    </button>
+                }
+                @if (podeVerNota)
+                {
+                    <button class="btn btn-outline-secondary" @onclick="AbrirNota">Nota fiscal</button>
+                }
+                @if (detalhe.Status != StatusVenda.Cancelada)
+                {
+                    <BotaoWhatsApp Telefone="@detalhe.TelefoneCliente" Rotulo="Enviar comprovante"
+                                   Mensagem="@WhatsApp.ComprovanteVenda(detalhe)" />
+                }
+                @if (avaliacaoDetalhe is { NotaDada: int dada })
+                {
+                    <span class="nota-dada" title="Nota que o cliente deu">@NotaAvaliacao.Estrelas(dada)</span>
+                }
+                else if (avaliacaoDetalhe is { } pedidoDetalhe)
+                {
+                    <BotaoWhatsApp Telefone="@pedidoDetalhe.Telefone" Rotulo="Pedir avaliação"
+                                   Titulo="Mandar o link de avaliação no WhatsApp" Mensagem="@pedidoDetalhe.Mensagem" />
+                }
+                <button class="btn btn-secondary" @onclick="Fechar">Fechar</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* Confirmação do cancelamento, exigindo motivo. *@
+@if (cancelando && detalhe != null)
+{
+    <div class="modal-overlay" @onclick="() => cancelando = false">
+        <div class="modal-content estreito" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h5>Cancelar venda #@detalhe.IdVenda</h5>
+            </div>
+
+            <div class="modal-body">
+                <p class="alerta-cancelamento">
+                    A venda deixa de contar no faturamento, no caixa e nas comissões.
+                    @if (detalhe.Itens.Any(i => i.CobertoPlano))
+                    {
+                        <text>
+                            Os créditos de plano consumidos voltam para a assinatura do cliente.
+                        </text>
+                    }
+                </p>
+
+                <label>Motivo <span class="obrigatorio">*</span></label>
+                <input class="form-control" placeholder="Ex.: cliente desistiu"
+                       @bind="motivoCancelamento" @bind:event="oninput" />
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary" @onclick="() => cancelando = false">Voltar</button>
+                <button class="btn btn-danger" disabled="@string.IsNullOrWhiteSpace(motivoCancelamento)"
+                        @onclick="ConfirmarCancelamento">
+                    Confirmar cancelamento
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<Janela Visivel="@(notaDaVenda != null)" Titulo="@($"Nota fiscal · venda #{notaDaVenda}")"
+        Largura="520" OnFechar="() => notaDaVenda = null">
+    <ChildContent>
+        @if (notaDaVenda is int id)
+        {
+            <CartaoNotaFiscal IdVenda="id" />
+        }
+    </ChildContent>
+</Janela>
+
+<Janela Visivel="@(editandoVenda != null)" Titulo="@($"Editar venda #{editandoVenda?.IdVenda}")"
+        Largura="460" Erro="@erroEdicao" OnFechar="FecharEdicao">
+    <ChildContent>
+        @if (editandoVenda != null)
+        {
+            <p class="text-muted" style="font-size: 14px;">
+                @editandoVenda.DataVenda.ToString("dd/MM/yyyy HH:mm") · @editandoVenda.ValorVenda.ToString("C")
+            </p>
+            <label class="form-label">Cliente</label>
+            <Seletor TItem="OpcaoId" TValor="int" Itens="OpcoesClienteEdicao"
+                     @bind-Valor="idClienteEdicao" TextoDe="o => o.Rotulo" ValorDe="o => o.Id"
+                     ComAvatar="true" Class="mb-3" />
+            @if (situacaoEdicao?.PodeTrocarProfissional == true)
+            {
+                <label class="form-label">Profissional</label>
+                <Seletor TItem="OpcaoId" TValor="int" Itens="OpcoesEdicao"
+                         @bind-Valor="idFuncionarioEdicao" TextoDe="o => o.Rotulo" ValorDe="o => o.Id"
+                         ComAvatar="true" Placeholder="Selecione" Class="mb-3" />
+            }
+            <p class="text-muted mb-0" style="font-size: 13px;">@situacaoEdicao?.Motivo</p>
+        }
+    </ChildContent>
+    <Rodape>
+        <button type="button" class="btn btn-outline-secondary" @onclick="FecharEdicao">Cancelar</button>
+        <button type="button" class="btn btn-primary" @onclick="SalvarEdicao">Salvar</button>
+    </Rodape>
+</Janela>
+
+@code {
+    private bool cancelando;
+    private string motivoCancelamento = "";
+    private List<Venda> vendas = new();
+
+    /// <summary>Vendas em grupos por dia, do mais recente para o mais antigo.</summary>
+    private IEnumerable<IGrouping<DateTime, Venda>> VendasPorDia =>
+        vendas.GroupBy(v => v.DataVenda.Date).OrderByDescending(g => g.Key);
+
+    /// <summary>"HOJE · QUINTA, 15/10" -- o dia da semana ajuda a situar.</summary>
+    private static string RotuloDoDia(DateTime dia)
+    {
+        var cultura = new System.Globalization.CultureInfo("pt-BR");
+        var semana = cultura.DateTimeFormat.GetDayName(dia.DayOfWeek);
+        var corpo = $"{semana}, {dia:dd/MM}".ToUpper(cultura);
+
+        if (dia == DateTime.Today) return $"HOJE · {corpo}";
+        if (dia == DateTime.Today.AddDays(-1)) return $"ONTEM · {corpo}";
+        return corpo;
+    }
+
+    /// <summary>Primeiros itens da venda, para dar contexto sem abrir o detalhe.</summary>
+    private static string ResumoDeItens(Venda v)
+    {
+        if (!string.IsNullOrWhiteSpace(v.Descricao)) return v.Descricao!;
+
+        return v.Itens.Count == 0 ? "—" : $"{v.Itens.Count} item(ns)";
+    }
+
+    /// <summary>
+    /// Classe do ponto de status. Credito de plano e roxo, cancelada e
+    /// cinza, e o resto saiu do caixa como pago.
+    /// </summary>
+    private static string ClasseDoPagamento(Venda v)
+    {
+        if (v.Status == StatusVenda.Cancelada) return "cancelada";
+        if (v.FormaPagamentoVenda == FormaPagamento.Plano) return "plano";
+        return "pago";
+    }
+    private List<Funcionario> funcionarios = new();
+
+    // Opcoes dos filtros. O Seletor recebe uma lista de itens, entao o
+    // "Todos" entra como item comum em vez de <option> solta.
+    private record OpcaoFuncionario(int Id, string Nome, string? Contagem);
+    private record OpcaoPagamento(string Valor, string Rotulo, string? Cor);
+
+    private List<OpcaoFuncionario> OpcoesFuncionario =>
+        new List<OpcaoFuncionario> { new(0, "Todos", null) }
+            .Concat(funcionarios.Select(f => new OpcaoFuncionario(
+                f.IdFuncionario,
+                f.NomeFuncionario ?? "Sem nome",
+                ContagemDoProfissional(f.IdFuncionario))))
+            .ToList();
+
+    /// <summary>Quantas vendas deste profissional ha na lista carregada.</summary>
+    private string? ContagemDoProfissional(int id)
+    {
+        var n = vendas.Count(v => v.IdFuncionario == id);
+        return n == 0 ? null : n.ToString();
+    }
+
+    private List<OpcaoPagamento> OpcoesPagamento =>
+        new List<OpcaoPagamento> { new("", "Todos", null) }
+            .Concat(FormaPagamento.Todas.Select(f =>
+                new OpcaoPagamento(f.Valor, f.Rotulo, "var(--ok)")))
+            .Append(new OpcaoPagamento(FormaPagamento.AReceber, FormaPagamento.Rotulo(FormaPagamento.AReceber), "var(--alerta)"))
+            .ToList();
+    private Venda? detalhe;
+
+    /// <summary>Pedido de avaliacao: a mensagem pronta, ou a nota se o cliente ja respondeu.</summary>
+    private record PedidoAvaliacao(string? Telefone, string Mensagem, int? NotaDada);
+
+    private PedidoAvaliacao? avaliacaoNova;
+    private PedidoAvaliacao? avaliacaoDetalhe;
+
+    /// <summary>Venda com o cartao da nota fiscal aberto.</summary>
+    private int? notaDaVenda;
+    private bool podeVerNota;
+
+    private Venda? editandoVenda;
+    private int idFuncionarioEdicao;
+    private string? erroEdicao;
+    private List<OpcaoId> OpcoesEdicao = new();
+    private List<OpcaoId> OpcoesClienteEdicao = new();
+    private int idClienteEdicao;
+    private VendaDAO.SituacaoEdicao? situacaoEdicao;
+    private int? idEditada;
+    private string? erro;
+    private int? idNova;
+
+    private DateTime? de;
+    private DateTime? ate;
+    private string cliente = "";
+    private int idFuncionario;
+    private string formaPagamento = "";
+
+    private decimal TicketMedio =>
+        vendas.Count == 0 ? 0m : Math.Round(vendas.Sum(v => v.ValorVenda) / vendas.Count, 2);
+
+    /// <summary>O relatório sai com os mesmos filtros da tela.</summary>
+    private string UrlRelatorio
+    {
+        get
+        {
+            var parametros = new Dictionary<string, string?>();
+            if (de.HasValue) parametros["de"] = de.Value.ToString("yyyy-MM-dd");
+            if (ate.HasValue) parametros["ate"] = ate.Value.ToString("yyyy-MM-dd");
+            if (!string.IsNullOrWhiteSpace(cliente)) parametros["cliente"] = cliente;
+            if (idFuncionario > 0) parametros["funcionario"] = idFuncionario.ToString();
+            if (!string.IsNullOrWhiteSpace(formaPagamento)) parametros["forma"] = formaPagamento;
+
+            return QueryHelpers.AddQueryString("/relatorio/vendas", parametros);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // O nome de quem esta logado fica gravado no cancelamento da venda.
+        await auth.PrepararAsync();
+        await permissao.CarregarAsync();
+        podeVerNota = permissao.PodeVer("notas");
+
+        var query = QueryHelpers.ParseQuery(new Uri(Navigation.Uri).Query);
+        if (query.TryGetValue("nova", out var valor) && int.TryParse(valor, out var id))
+        {
+            idNova = id;
+            try
+            {
+                if (vendaDAO.BuscarPorId(id) is { } nova) avaliacaoNova = MontarPedido(nova);
+            }
+            catch
+            {
+                // O pedido de avaliacao e acessorio: a venda ja foi registrada.
+            }
+        }
+        if (query.TryGetValue("editada", out var editada) && int.TryParse(editada, out var idE))
+            idEditada = idE;
+
+        try
+        {
+            funcionarios = funcionarioDAO.ListarTodos() ?? new();
+        }
+        catch (Exception ex)
+        {
+            erro = "Erro ao carregar profissionais: " + ex.Message;
+        }
+
+        Carregar();
+    }
+
+    private void Carregar()
+    {
+        try
+        {
+            erro = null;
+            vendas = vendaDAO.ListarTodas(new VendaDAO.Filtro
+            {
+                De = de,
+                // 'Ate' e exclusivo no SQL: soma um dia para incluir o dia escolhido.
+                Ate = ate?.AddDays(1),
+                Cliente = cliente,
+                IdFuncionario = idFuncionario > 0 ? idFuncionario : null,
+                FormaPagamento = string.IsNullOrWhiteSpace(formaPagamento) ? null : formaPagamento
+            });
+        }
+        catch (Exception ex)
+        {
+            erro = "Erro ao carregar as vendas: " + ex.Message;
+            vendas = new();
+        }
+    }
+
+    private void Aplicar()
+    {
+        idNova = null;
+        avaliacaoNova = null;
+        idEditada = null;
+        Carregar();
+    }
+
+    private void Limpar()
+    {
+        de = ate = null;
+        cliente = "";
+        idFuncionario = 0;
+        formaPagamento = "";
+        Aplicar();
+    }
+
+    private void Periodo(int dias)
+    {
+        ate = DateTime.Today;
+        de = DateTime.Today.AddDays(-dias);
+        Aplicar();
+    }
+
+    private void PeriodoMes()
+    {
+        var hoje = DateTime.Today;
+        de = new DateTime(hoje.Year, hoje.Month, 1);
+        ate = hoje;
+        Aplicar();
+    }
+
+    private void Visualizar(int id)
+    {
+        try
+        {
+            erro = null;
+            detalhe = vendaDAO.BuscarPorId(id);
+            avaliacaoDetalhe = null;
+            try
+            {
+                if (detalhe != null) avaliacaoDetalhe = MontarPedido(detalhe);
+            }
+            catch
+            {
+                // Sem o pedido de avaliacao, o detalhe da venda abre igual.
+            }
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+    }
+
+    /// <summary>Excluir uma venda e cancelar: abre o detalhe ja com o pedido de motivo.</summary>
+    private void AbrirCancelamento(int id)
+    {
+        Visualizar(id);
+        if (detalhe != null && detalhe.Status != StatusVenda.Cancelada) cancelando = true;
+    }
+
+    private void Editar(int id)
+    {
+        try
+        {
+            erro = null;
+            erroEdicao = null;
+
+            // Caixa aberto e comissao nao paga: a tela da venda inteira.
+            // Senao, so cliente e profissional, aqui no modal.
+            var situacao = vendaDAO.SituacaoParaEditar(id);
+            if (situacao.Modo == VendaDAO.ModoEdicao.Completa)
+            {
+                Navigation.NavigateTo($"/venda/{id}");
+                return;
+            }
+
+            if (situacao.Modo == VendaDAO.ModoEdicao.Bloqueada)
+            {
+                erro = situacao.Motivo;
+                return;
+            }
+
+            var venda = vendaDAO.BuscarPorId(id);
+            if (venda == null) return;
+
+            OpcoesEdicao = funcionarioDAO.ListarTodos()
+                .Select(f => new OpcaoId(f.IdFuncionario, f.NomeFuncionario ?? "Sem nome")).ToList();
+            OpcoesClienteEdicao = new List<OpcaoId> { new(0, "Sem cliente") }
+                .Concat(clienteDAO.ListarTodos().Select(c => new OpcaoId(c.IdCliente, c.Identificacao)))
+                .ToList();
+            idFuncionarioEdicao = venda.IdFuncionario ?? 0;
+            idClienteEdicao = venda.IdCliente ?? 0;
+            situacaoEdicao = situacao;
+            editandoVenda = venda;
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+    }
+
+    private void FecharEdicao()
+    {
+        editandoVenda = null;
+        erroEdicao = null;
+    }
+
+    private void SalvarEdicao()
+    {
+        if (editandoVenda == null) return;
+
+        try
+        {
+            vendaDAO.AtualizarClienteEProfissional(editandoVenda.IdVenda,
+                idClienteEdicao > 0 ? idClienteEdicao : null, idFuncionarioEdicao);
+            FecharEdicao();
+            Carregar();
+        }
+        catch (Exception ex)
+        {
+            erroEdicao = ex.Message;
+        }
+    }
+
+    /// <summary>O cartao da nota toma o lugar do detalhe; fechar volta para a lista.</summary>
+    private void AbrirNota()
+    {
+        notaDaVenda = detalhe?.IdVenda;
+        Fechar();
+    }
+
+    /// <summary>
+    /// Null quando nao ha a quem pedir: venda cancelada, sem cliente, sem
+    /// WhatsApp valido ou cliente que recusou mensagens (LGPD).
+    /// </summary>
+    private PedidoAvaliacao? MontarPedido(Venda venda)
+    {
+        if (venda.Status == StatusVenda.Cancelada || venda.IdCliente is not int idCliente) return null;
+
+        var cliente = clienteDAO.BuscarPorId(idCliente);
+        if (cliente == null || cliente.RecusouWhatsApp || WhatsApp.Numero(cliente.Telefone) == null) return null;
+
+        if (avaliacaoDAO.GarantirToken(venda.IdVenda) is not string token) return null;
+        var avaliacao = avaliacaoDAO.BuscarPorVenda(venda.IdVenda);
+
+        return new PedidoAvaliacao(
+            cliente.Telefone,
+            WhatsApp.PedidoAvaliacao(cliente.NomeCliente, avaliacao?.NomeFuncionario, Navigation.BaseUri + "avaliar/" + token),
+            avaliacao?.Nota);
+    }
+
+    private void Fechar()
+    {
+        detalhe = null;
+        avaliacaoDetalhe = null;
+        cancelando = false;
+        motivoCancelamento = "";
+    }
+
+    private void ConfirmarCancelamento()
+    {
+        try
+        {
+            erro = null;
+            if (detalhe == null) return;
+
+            vendaDAO.Cancelar(detalhe.IdVenda, motivoCancelamento, auth.GetUsuarioNome());
+            Fechar();
+            Carregar();
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+            cancelando = false;
+        }
+    }
+}

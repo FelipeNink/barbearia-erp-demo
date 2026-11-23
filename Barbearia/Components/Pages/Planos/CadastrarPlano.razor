@@ -1,0 +1,13 @@
+@page "/plano/novo"
+@rendermode InteractiveServer
+@attribute [Authorize(Policy = Politicas.CriarPlano)]
+
+@using Barbearia.Models
+
+<PageTitle>Novo plano</PageTitle>
+
+<FormPlano Modelo="plano" Novo="true" />
+
+@code {
+    private readonly Plano plano = new();
+}

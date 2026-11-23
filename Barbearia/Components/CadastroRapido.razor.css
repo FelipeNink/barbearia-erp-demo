@@ -1,0 +1,110 @@
+.fundo {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
+    padding: 1.5rem;
+}
+
+.caixa {
+    width: 100%;
+    max-width: 420px;
+    background: var(--superficie);
+    border-radius: 10px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+}
+
+.cabecalho {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--borda-suave);
+}
+
+.cabecalho h5 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--texto);
+}
+
+.fechar {
+    width: 1.9rem;
+    height: 1.9rem;
+    background: none;
+    border: none;
+    border-radius: 50%;
+    font-size: 1.3rem;
+    line-height: 1;
+    color: var(--texto-fraco);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.fechar:hover {
+    background: var(--superficie-3);
+    color: var(--texto);
+}
+
+.corpo {
+    padding: 1.25rem;
+}
+
+.corpo label {
+    display: block;
+    margin-bottom: 0.3rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--texto-fraco);
+}
+
+.corpo ::deep .form-control {
+    margin-bottom: 1rem;
+}
+
+.obrigatorio {
+    color: var(--perigo-escuro);
+}
+
+.dupla {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+}
+
+.ajuda {
+    margin: -0.5rem 0 0;
+    font-size: 0.78rem;
+    color: var(--texto-fraco);
+}
+
+.erro {
+    margin-bottom: 1rem;
+    padding: 0.6rem 0.75rem;
+    background: var(--perigo-fundo);
+    border-left: 3px solid var(--perigo-escuro);
+    border-radius: 5px;
+    font-size: 0.85rem;
+    color: var(--perigo-escuro);
+}
+
+.rodape {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    padding: 0.9rem 1.25rem;
+    border-top: 1px solid var(--borda-suave);
+}
+
+.erro-telefone {
+    display: block;
+    margin-top: 5px;
+    font-size: 12.5px;
+    color: var(--perigo);
+}
